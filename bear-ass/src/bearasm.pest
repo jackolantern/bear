@@ -1,0 +1,62 @@
+start = { SOI ~ body ~ EOI }
+
+body = { line* }
+line = { meta | normal }
+meta = { directive | sep }
+normal = { label_list ~ (data | definition_ref | instruction) }
+
+sep = @{ "===" ~ "="* }
+directive = { directive_start ~ (raw_string | argument | identifier)* ~ ";" }
+directive_start = @{ "#" ~ identifier }
+
+argument = _{ expression | argument_list }
+argument_list = { "[" ~ "]" | "[" ~ argument_list_item* ~ "]" }
+argument_list_item = _{ data | definition_ref | instruction }
+
+instruction = { identifier }
+
+expression = _{ expression_tree | expression_parens | expression_leaf }
+expression_tree = { expression_parens ~ binop ~ expression | expression_leaf ~ binop ~ expression }
+expression_parens = _{ "(" ~ expression ~ ")" }
+expression_leaf = { address | number | definition_ref | quoted | char }
+quoted = ${ "`" ~ instruction }
+
+binop = { "+" | "-" | "*" | "^" | "&" | "|" | "<<" | ">>" }
+number = { number_hex | number_dec }
+number_hex = @{ "0x" ~ digit_hex ~ digit_hex* }
+number_dec = @{ ("+" | "-")? ~ digit_dec ~ digit_dec* }
+
+address = @{ here | next | prev | label_ref }
+here = { "@" }
+next = { "$>" }
+prev = { "<$" }
+there = { "$" }
+
+identifier = @{ identifier_start ~ (identifier_start | digit_dec | "." | ":")* ~ "?"? }
+identifier_start = { "_" | alpha }
+
+label = @{ (":" ~ identifier)+ | there }
+label_list = { label* }
+label_ref = @{ "&" ~ identifier ~ (":" ~ identifier)* }
+definition_ref = @{ "!" ~ identifier }
+
+data = { string | value }
+value = { kind ~ expression }
+kind = { "d8" | "d16" | "d32" }
+
+string = { r_string | c_string | s_string }
+r_string = { "r" ~ raw_string }
+c_string = { "c" ~ raw_string }
+s_string = { "s" ~ raw_string }
+raw_string = @{ quote ~ (escape | !(quote | NEWLINE) ~ ANY)* ~ quote }
+escape = @{ "\\" ~ (quote | "n" | "r" | "t") }
+quote = _{ "\"" }
+
+char = @{ "'" ~ ("\\n" | "\\t" | "\\r" | "\\'" | ANY) ~ "'" }
+digit_dec = { '0'..'9' }
+digit_hex = { '0'..'9' | 'A'..'F' | 'a'..'f' }
+alpha = { 'a'..'z' | 'A'..'Z' }
+
+COMMENT = _{ "--" ~ (!NEWLINE ~ ANY)* }
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+

@@ -1,0 +1,9 @@
+*.bin
+*.debug
+*.log
+*/target
+target/
+log
+stdout
+stderr
+history.txt

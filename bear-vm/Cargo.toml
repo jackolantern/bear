@@ -1,0 +1,14 @@
+[package]
+name = "bear-vm"
+version = "0.1.0"
+authors = ["John Connor <john.theman.connor@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "bear_vm"
+path = "src/lib.rs"
+
+[dependencies]
+strum = "0.18.0"
+strum_macros = "0.18.0"
+

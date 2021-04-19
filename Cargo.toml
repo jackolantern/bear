@@ -1,0 +1,6 @@
+[workspace]
+members = ["bear-vm", "bear-ass", "bear-app"]
+
+[profile.release]
+lto = true
+
