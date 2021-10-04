@@ -3,8 +3,8 @@ use std::mem::transmute_copy;
 use std::convert::TryFrom;
 
 use crate::cell;
-use crate::device::{Device, DMARequest};
 pub use crate::cell::Cell;
+use crate::device::{DMARequest, Device};
 
 // TODO: Traps and Trap Handlers.
 
@@ -14,24 +14,36 @@ pub use crate::cell::Cell;
 #[derive(Debug)]
 pub struct Error {
     ip: Option<usize>,
-    message: String
+    message: String,
 }
 
 impl Error {
     fn data_underflow() -> Error {
-        Error{ message: String::from("Data stack underflow."), ip: None }
+        Error {
+            message: String::from("Data stack underflow."),
+            ip: None,
+        }
     }
 
     fn address_underflow() -> Error {
-        Error{ message: String::from("Address stack underflow."), ip: None }
+        Error {
+            message: String::from("Address stack underflow."),
+            ip: None,
+        }
     }
 
     fn ip_oob(ip: usize) -> Error {
-        Error{ message: String::from("IP went out of bounds."), ip: Some(ip) }
+        Error {
+            message: String::from("IP went out of bounds."),
+            ip: Some(ip),
+        }
     }
 
     fn invalid_instruction(byte: u8) -> Error {
-        Error{ message: format!("Invalid opcode: 0x{:x}", byte), ip: None }
+        Error {
+            message: format!("Invalid opcode: 0x{:x}", byte),
+            ip: None,
+        }
     }
 
     fn with_ip(mut self, ip: usize) -> Self {
@@ -40,14 +52,17 @@ impl Error {
     }
 
     fn with_ip_from_state(mut self, state: &ExecutionState) -> Self {
-        self.ip = Some(state.loaded_word_index * 4 + state.instruction_index);
+        self.ip = Some(state.ip());
         return self;
     }
 }
 
 impl From<std::num::TryFromIntError> for Error {
     fn from(e: std::num::TryFromIntError) -> Self {
-        Error{ message: format!("Arithmetic error: '{}'.", e), ip: None }
+        Error {
+            message: format!("Arithmetic error: '{}'.", e),
+            ip: None,
+        }
     }
 }
 
@@ -106,7 +121,7 @@ pub enum OpCode {
     /// Replace the top two values on the the data stack with their "modulus" (tos % nos).
     Mod,
     // TODO: Signed Shift?
-    /// Shift the second value on the data stack by the value top of the data stack (nos << tos).
+    /// Shift the second value on the data stack by the value on top of the data stack (nos << tos).
     Shift,
     /// Sign extend the 8 bit value on the top of the data stack to a 32 bit signed value.
     Sext8,
@@ -130,18 +145,16 @@ pub enum OpCode {
     ReturnIfZ,
 
     Load,
-    Loads,
     Store,
-    Stores,
     Load8,
     Store8,
-    Loads8,
-    Stores8,
 
+    // Note:
+    // `Io` needs to be the next to last instruction, or the check in `TryFrom<u8> for OpCode`
+    // needs to change.
     Io,
-
     /// Halt execution.  If the value on top of the data stack is `-1` then perform a core dump.
-    Halt = 0b_0111_1111
+    Halt = 0b_0111_1111,
 }
 
 impl TryFrom<u8> for OpCode {
@@ -181,11 +194,6 @@ impl std::fmt::Display for OpCode {
             OpCode::Store => write!(f, "store"),
             OpCode::Load8 => write!(f, "load.8"),
             OpCode::Store8 => write!(f, "store.8"),
-            OpCode::Loads => write!(f, "loads"),
-            OpCode::Stores => write!(f, "stores"),
-            OpCode::Loads8 => write!(f, "loads.8"),
-            OpCode::Stores8 => write!(f, "stores.8"),
-            OpCode::Io => write!(f, "io"),
 
             OpCode::And => write!(f, "and"),
             OpCode::Or => write!(f, "or"),
@@ -202,6 +210,8 @@ impl std::fmt::Display for OpCode {
             OpCode::Mod => write!(f, "mod"),
             OpCode::Shift => write!(f, "shift"),
 
+            OpCode::Io => write!(f, "io"),
+
             OpCode::Nop => write!(f, "nop"),
         }
     }
@@ -214,14 +224,39 @@ impl OpCode {
 }
 
 /// Allows for very simple debugging.
-pub struct CallbackDebugger {
-    pub ip: fn(usize),
-    pub data_pop: fn(),
-    pub data_push: fn(Cell),
-    pub address_pop: fn(),
-    pub address_push: fn(Cell),
-    pub store_8: fn(Cell, Cell),
-    pub store_16: fn(Cell, Cell),
+pub trait CallbackDebugger {
+    fn ip(&self, state: &ExecutionState, op: OpCode) {
+        let ii = state.instruction_index;
+        let lw = state.loaded_word_index;
+        let cw = state.current_word_index;
+        eprintln!("ii: {}, cw: {}, lw: {}, op: {}", ii, cw, lw, op);
+        eprintln!("\tdata: {:?}", state.vm.data);
+        eprintln!("\taddr: {:?}", state.vm.address);
+    }
+
+    fn data_pop(&self, vm: &BearVM) {
+        eprintln!("data.pop: {:?}", vm.data);
+    }
+
+    fn data_push(&self, vm: &BearVM, cell: Cell) {
+        eprintln!("data.push: {:?} {:?}", cell, vm.data);
+    }
+
+    fn address_pop(&self, vm: &BearVM) {
+        eprintln!("address.pop: {:?}", vm.address);
+    }
+
+    fn address_push(&self, vm: &BearVM, cell: Cell) {
+        eprintln!("address.push: {:?} {:?}", cell, vm.address);
+    }
+
+    fn store(&self, address: Cell, value: Cell) {
+        eprintln!("store: {:?} <- {:?}", address, value);
+    }
+
+    fn store_8(&self, address: Cell, value: Cell) {
+        eprintln!("store.8: {:?} <- {:?}", address, value);
+    }
 }
 
 /// The runtime state of the VM.
@@ -255,16 +290,17 @@ pub struct BearVM {
     pub address: Vec<Cell>,
     /// The external devices.
     pub devices: Vec<Box<dyn Device>>,
+
     /// Optional logger.
     pub debug_logger: Option<fn(&str)>,
     /// Optional debuger.
-    pub callback_debugger: Option<CallbackDebugger>
+    pub callback_debugger: Option<Box<dyn CallbackDebugger>>,
 }
 
 /// Wraps calls to push and pop the stacks with calls to the debugger and error handling code.
 impl BearVM {
     pub fn data_pop(&mut self) -> Result<Cell, Error> {
-        self.callback_debugger.as_ref().map(|d| (d.data_pop)());
+        self.callback_debugger.as_ref().map(|d| (d.data_pop(self)));
         self.data.pop().ok_or(Error::data_underflow())
     }
 
@@ -273,35 +309,48 @@ impl BearVM {
     }
 
     pub fn data_push(&mut self, cell: Cell) {
-        self.callback_debugger.as_ref().map(|d| (d.data_push)(cell));
+        self.callback_debugger
+            .as_ref()
+            .map(|d| (d.data_push(self, cell)));
         self.data.push(cell);
     }
 
     fn address_pop(&mut self) -> Result<Cell, Error> {
-        self.callback_debugger.as_ref().map(|d| (d.address_pop)());
+        self.callback_debugger
+            .as_ref()
+            .map(|d| (d.address_pop(self)));
         let value = self.address.pop().ok_or(Error::address_underflow())?;
         return Ok(value as Cell);
     }
 
     fn address_push(&mut self, cell: Cell) {
-        self.callback_debugger.as_ref().map(|d| (d.address_push)(cell));
+        self.callback_debugger
+            .as_ref()
+            .map(|d| (d.address_push(self, cell)));
         self.address.push(unsafe { ::std::mem::transmute(cell) });
     }
 }
 
 impl ExecutionState {
-    pub fn ip(&self) -> usize { self.current_word_index * cell::SIZE + self.instruction_index }
+    pub fn ip(&self) -> usize {
+        self.loaded_word_index * cell::SIZE + self.instruction_index
+    }
 
-    pub fn ip_set(&mut self, loaded_word_index: usize, current_word_index: usize, instruction_index: usize) -> Result<(), Error> {
-        // self.callback_debugger.as_ref().map(|d| (d.ip)(value));
+    pub fn ip_set(
+        &mut self,
+        loaded_word_index: usize,
+        current_word_index: usize,
+        instruction_index: usize,
+    ) -> Result<(), Error> {
         if self.vm.image.len() < loaded_word_index {
-            Err(Error::ip_oob(loaded_word_index * cell::SIZE + instruction_index))
+            Err(Error::ip_oob(
+                loaded_word_index * cell::SIZE + instruction_index,
+            ))
         } else {
             self.loaded_word_index = loaded_word_index;
             self.current_word_index = current_word_index;
             self.instruction_index = instruction_index;
-            let word = self.vm.image[self.loaded_word_index];
-            self.word = word.to_le_bytes();
+            self.word = self.vm.image[self.loaded_word_index].to_le_bytes();
             Ok(())
         }
     }
@@ -310,7 +359,9 @@ impl ExecutionState {
         assert!(self.instruction_index < 4);
         assert!(self.loaded_word_index & 0x7FFF == self.loaded_word_index);
         assert!(self.current_word_index & 0x7FFF == self.current_word_index);
-        let encoded = ((self.loaded_word_index << 17) | (self.current_word_index << 2) | self.instruction_index) as u32;
+        let encoded = ((self.loaded_word_index << 17)
+            | (self.current_word_index << 2)
+            | self.instruction_index) as u32;
         return encoded;
     }
 
@@ -329,8 +380,7 @@ impl ExecutionState {
             if self.vm.image.len() < self.loaded_word_index {
                 return Err(Error::ip_oob(self.ip()));
             }
-            let word = self.vm.image[self.loaded_word_index];
-            self.word = word.to_le_bytes();
+            self.word = self.vm.image[self.loaded_word_index].to_le_bytes();
         } else {
             self.instruction_index += 1;
         }
@@ -363,13 +413,9 @@ impl ExecutionState {
 
 impl ExecutionState {
     fn inst_lit_next_word(&mut self) -> Result<(), Error> {
-        // assert!(self.instruction_index == 3);
-
         self.current_word_index += 1;
         let value = self.vm.image[self.current_word_index];
         self.vm.data_push(value.into());
-        // self.instruction_index = 0;
-        // self.word = self.vm.image[self.word_index].to_le_bytes();
         return Ok(());
     }
 
@@ -411,13 +457,12 @@ impl ExecutionState {
     /**
      * Halt.
      */
-    fn inst_halt(&mut self) -> Result<(), Error> {
+    fn inst_halt(&mut self) {
         match self.vm.data.last() {
             Some(Cell(u32::MAX)) => {
                 self.dump().ok();
-                Ok(())
-            },
-            _ => Ok(())
+            }
+            _ => {}
         }
     }
 
@@ -507,21 +552,24 @@ impl ExecutionState {
     fn inst_equal(&mut self) -> Result<(), Error> {
         let tos = self.data_pop()?;
         let nos = self.data_pop()?;
-        self.vm.data_push(if tos == nos { (-1).into() } else { 0.into() });
+        self.vm
+            .data_push(if tos == nos { (-1).into() } else { 0.into() });
         return Ok(());
     }
 
     fn inst_less_than(&mut self) -> Result<(), Error> {
         let tos = self.data_pop()?;
         let nos = self.data_pop()?;
-        self.vm.data_push(if tos < nos { (-1).into() } else { 0.into() });
+        self.vm
+            .data_push(if tos < nos { (-1).into() } else { 0.into() });
         return Ok(());
     }
 
     fn inst_greater_than(&mut self) -> Result<(), Error> {
         let tos = self.data_pop()?;
         let nos = self.data_pop()?;
-        self.vm.data_push(if tos > nos { (-1).into() } else { 0.into() });
+        self.vm
+            .data_push(if tos > nos { (-1).into() } else { 0.into() });
         return Ok(());
     }
 
@@ -587,7 +635,11 @@ impl ExecutionState {
                 return Ok(());
             }
         }
-        let (w, i) = if ip != 0 && ip % 4 == 0 { ((ip / 4) - 1, 3)} else { ((ip / 4), (ip % 4) - 1)};
+        let (w, i) = if ip != 0 && ip % 4 == 0 {
+            ((ip / 4) - 1, 3)
+        } else {
+            ((ip / 4), (ip % 4) - 1)
+        };
         self.ip_set(w, w, i)?;
         return Ok(());
     }
@@ -600,8 +652,13 @@ impl ExecutionState {
             }
         }
         let current = self.ip_get_encoded();
-        self.vm.address_push(Cell::try_from(current).map_err(|_| Error::ip_oob(current as usize))?);
-        let (w, i) = if ip != 0 && ip % 4 == 0 { ((ip / 4) - 1, 3)} else { ((ip / 4), (ip % 4) - 1)};
+        self.vm
+            .address_push(Cell::try_from(current).map_err(|_| Error::ip_oob(current as usize))?);
+        let (w, i) = if ip != 0 && ip % 4 == 0 {
+            ((ip / 4) - 1, 3)
+        } else {
+            ((ip / 4), (ip % 4) - 1)
+        };
         self.ip_set(w, w, i)?;
         return Ok(());
     }
@@ -626,7 +683,6 @@ impl ExecutionState {
         let device_id = self.data_pop()?;
         let device = &mut self.vm.devices[device_id.0 as usize];
         let result = device.ioctl(command.0);
-        self.vm.data_push(device_id.into());
         self.vm.data_push(result.into());
         return Ok(());
     }
@@ -634,66 +690,69 @@ impl ExecutionState {
     /**
      * [&x] -> [(&x)+4, x]
      */
-    fn inst_load(&mut self, stream: bool) -> Result<(), Error> {
+    fn inst_load(&mut self) -> Result<(), Error> {
         let address: usize = self.data_pop()?.into();
         let r = address % 4;
         let value = if r == 0 {
             self.vm.image[address / 4]
         } else {
+            panic!("load must be aligned.")
+            /*
             let shift = 2 * r;
             let mask = 0xFFFFFFFF >> shift;
             let high = (self.vm.image[address / 4] & mask) << shift;
             let low = (self.vm.image[address / 4 + 1] & !mask) >> (8 - shift);
             high | low
+            */
         };
         self.vm.data_push(Cell::from(value));
-        if stream {
-            self.vm.data_push(Cell::from(address as u32 + 4));
-        }
         return Ok(());
     }
 
-    fn inst_load_8(&mut self, stream: bool) -> Result<(), Error> {
+    fn inst_load_8(&mut self) -> Result<(), Error> {
         let address: usize = self.data_pop()?.into();
         let word = self.vm.image[address / 4];
         let byte = word.to_le_bytes()[address % 4];
         self.vm.data_push(Cell::from(byte));
-        if stream {
-            self.vm.data_push(Cell::from(address as u32 + 1));
-        }
         return Ok(());
     }
 
     /**
      * [Y, &x] -> [(&x) + 4]; &x = Y
      */
-    fn inst_store(&mut self, stream: bool) -> Result<(), Error> {
+    fn inst_store(&mut self) -> Result<(), Error> {
         let value = self.data_pop()?;
-        let address  = self.data_pop()?;
-        self.vm.callback_debugger.as_ref().map(|d| (d.store_8)(address, value));
+        let address = self.data_pop()?;
+        self.vm
+            .callback_debugger
+            .as_ref()
+            .map(|d| (d.store_8(address, value)));
         let value: u32 = value.into();
         let address: usize = address.into();
         let r = address % 4;
         if r == 0 {
             self.vm.image[address as usize / 4] = value;
         } else {
+            panic!("store must be aligned.");
+            /*
             let shift = 2 * r;
             let mask = 0xFFFFFFFF >> shift;
             let low = value & !mask;
             let high = value & mask;
             self.vm.image[address / 4] = (self.vm.image[address / 4] & mask) | low;
             self.vm.image[address / 4 + 1] = (self.vm.image[address / 4 + 1] & mask) | high;
-        }
-        if stream {
-            self.vm.data_push(Cell::from((address + 4) as u32));
+            */
         }
         return Ok(());
     }
 
-    fn inst_store_8(&mut self, stream: bool) -> Result<(), Error> {
+    fn inst_store_8(&mut self) -> Result<(), Error> {
         let value = self.data_pop()?;
-        let address  = self.data_pop()?;
-        self.vm.callback_debugger.as_ref().map(|d| (d.store_8)(address, value));
+        let address = self.data_pop()?;
+        self.vm
+            .callback_debugger
+            .as_ref()
+            .map(|d| (d.store_8(address, value)));
         // TODO: interupt if too big.
         let value: u32 = value.into();
         let address: usize = address.into();
@@ -701,9 +760,6 @@ impl ExecutionState {
         let mask = 0xFF << (address % 4) * 8;
         let value = value << (address % 4) * 8;
         self.vm.image[address as usize / 4] = (word & !mask) | value;
-        if stream {
-            self.vm.data_push(Cell::from((address + 1) as u32));
-        }
         return Ok(());
     }
 }
@@ -713,8 +769,7 @@ impl ExecutionState {
         self.instruction_index = 0;
         self.loaded_word_index = 0;
         self.current_word_index = 0;
-        let word = self.vm.image[self.loaded_word_index];
-        self.word = word.to_le_bytes();
+        self.word = self.vm.image[self.loaded_word_index].to_le_bytes();
         self.running = true;
 
         loop {
@@ -730,6 +785,10 @@ impl ExecutionState {
 
     pub fn step(&mut self) -> Result<(), Error> {
         let instruction = self.instruction()?;
+        self.vm
+            .callback_debugger
+            .as_ref()
+            .map(|d| d.ip(self, instruction));
         match instruction {
             OpCode::Nop => self.inst_nop(),
 
@@ -748,8 +807,8 @@ impl ExecutionState {
             OpCode::Mod => self.inst_rem(),
             OpCode::Shift => self.inst_shift(),
 
-            OpCode::Dup  => self.inst_dup(),
-            OpCode::Drop  => self.inst_drop(),
+            OpCode::Dup => self.inst_dup(),
+            OpCode::Drop => self.inst_drop(),
             OpCode::Swap => self.inst_swap(),
             OpCode::MoveDataToAddr => self.inst_move_data_to_address(),
             OpCode::MoveAddrToData => self.inst_move_address_to_data(),
@@ -761,22 +820,19 @@ impl ExecutionState {
             OpCode::JumpIfZ => self.inst_jump(true),
             OpCode::ReturnIfZ => self.inst_return(true),
 
-            OpCode::Load => self.inst_load(false),
-            OpCode::Store => self.inst_store(false),
-            OpCode::Load8 => self.inst_load_8(false),
-            OpCode::Store8 => self.inst_store_8(false),
-            OpCode::Loads => self.inst_load(true),
-            OpCode::Stores => self.inst_store(true),
-            OpCode::Loads8 => self.inst_load_8(true),
-            OpCode::Stores8 => self.inst_store_8(true),
-            OpCode::Io => self.inst_io(),
+            OpCode::Load => self.inst_load(),
+            OpCode::Store => self.inst_store(),
+            OpCode::Load8 => self.inst_load_8(),
+            OpCode::Store8 => self.inst_store_8(),
 
             OpCode::Lit => self.inst_lit_next_word(),
             OpCode::Sext8 => self.inst_sext_8(),
             OpCode::Sext16 => self.inst_sext_16(),
 
+            OpCode::Io => self.inst_io(),
+
             OpCode::Halt => {
-                self.inst_halt()?;
+                self.inst_halt();
                 self.running = false;
                 return Ok(());
             }
@@ -796,7 +852,7 @@ impl ExecutionState {
                         assert!(address % 4 == 0);
                         let word = self.vm.image[address / 4];
                         device.dma_read_response(address, word);
-                    },
+                    }
                     Some(DMARequest::Write(address, value)) => {
                         assert!(address % 4 == 0);
                         self.vm.image[address / 4] = value;
@@ -810,7 +866,8 @@ impl ExecutionState {
 
 impl BearVM {
     fn log(&self, _message: &str) {
-        #[cfg(debug)]{
+        #[cfg(debug)]
+        {
             self.debug_logger.map(|f| {
                 f(_message);
                 return f;
@@ -820,12 +877,10 @@ impl BearVM {
 }
 
 impl BearVM {
-    pub fn empty() -> BearVM {
-        BearVM{ image: vec![], data: Vec::new(), address: Vec::new(), debug_logger: None, devices: Vec::new(), callback_debugger: None }
-    }
-
-    pub fn new(image: Vec<u32>) -> BearVM {
-        BearVM{ image, data: Vec::new(), address: Vec::new(), debug_logger: None, devices: Vec::new(), callback_debugger: None }
+    pub fn new(image: Vec<u32>) -> Self {
+        let mut vm: Self = Default::default();
+        vm.image = image;
+        vm
     }
 
     pub fn with_logger(mut self, logger: fn(&str)) -> BearVM {
@@ -833,7 +888,7 @@ impl BearVM {
         return self;
     }
 
-    pub fn with_callback_debugger(mut self, debugger: CallbackDebugger) -> BearVM {
+    pub fn with_callback_debugger(mut self, debugger: Box<dyn CallbackDebugger>) -> BearVM {
         self.callback_debugger = Some(debugger);
         return self;
     }
@@ -846,13 +901,13 @@ impl BearVM {
     pub fn start(self) -> Result<ExecutionState, Error> {
         self.log(&format!("stated."));
 
-        let state = ExecutionState{
+        let state = ExecutionState {
             loaded_word_index: 0,
             current_word_index: 0,
             instruction_index: 0,
             word: self.image[0].to_le_bytes(),
             running: true,
-            vm: self
+            vm: self,
         };
         return Ok(state);
     }
@@ -864,4 +919,3 @@ impl BearVM {
         return Ok(());
     }
 }
-

@@ -5,10 +5,10 @@ use std::path::Path;
 
 use serde_json;
 
-use bear_ass::Error;
+use bear_ass::assembler::Assembler;
 use bear_ass::parser;
 use bear_ass::processor::Processor;
-use bear_ass::assembler::Assembler;
+use bear_ass::Error;
 
 pub fn go() -> Result<(), Error> {
     let mut args: Vec<String> = env::args().collect();
@@ -25,20 +25,26 @@ pub fn go() -> Result<(), Error> {
     // let arg3 = args.pop();
     let in_path = Path::new(&arg1);
     let out_bin_path = Path::new(&arg2);
-    let out_debug_path = out_bin_path.with_file_name(out_bin_path.file_stem().expect("No output filename.")).with_extension("debug");
+    let out_debug_path = out_bin_path
+        .with_file_name(out_bin_path.file_stem().expect("No output filename."))
+        .with_extension("debug");
     let output_debug_symbols = true; // !arg3.is_none() && (arg3 == Some("-d".to_string()) || arg3 == Some("--debug".to_string()));
-    let out_bin = std::fs::File::create(out_bin_path).expect(&format!("Unable to create file: {:?}", out_bin_path));
+    let out_bin = std::fs::File::create(out_bin_path)
+        .expect(&format!("Unable to create file: {:?}", out_bin_path));
     let mut outbin_buf = std::io::BufWriter::new(out_bin);
     let in_file = std::fs::File::open(in_path).expect("Can't open file.");
     let mut reader = std::io::BufReader::new(in_file);
 
     let program = parse(&mut reader)?;
     let processor = match Processor::process(program) {
-        Err(e) => { panic!("Processor error: {:?}", e) },
-        Ok(p) => p
+        Err(e) => {
+            panic!("Processor error: {:?}", e)
+        }
+        Ok(p) => p,
     };
     if output_debug_symbols {
-        let out_debug = std::fs::File::create(&out_debug_path).expect(&format!("Unable to create file: {:?}", out_debug_path));
+        let out_debug = std::fs::File::create(&out_debug_path)
+            .expect(&format!("Unable to create file: {:?}", out_debug_path));
         let mut outdebug_buf = std::io::BufWriter::new(out_debug);
         write_debug(&processor, &mut outdebug_buf)?;
     }
@@ -50,7 +56,9 @@ pub fn go() -> Result<(), Error> {
 pub fn parse(reader: &mut dyn Read) -> Result<parser::ast::Program, Error> {
     let mut contents = String::new();
     reader.read_to_string(&mut contents).unwrap();
-    let program = parser::Parser{}.parse(&contents).map_err(|e| Error::ParserError(e))?;
+    let program = parser::Parser {}
+        .parse(&contents)
+        .map_err(|e| Error::ParserError(e))?;
     return Ok(program);
 }
 
@@ -59,4 +67,3 @@ pub fn write_debug(p: &Processor, buf: &mut dyn Write) -> Result<(), Error> {
     serde_json::to_writer_pretty(buf, &entries).map_err(|e| Error::SerdeError(e))?;
     return Ok(());
 }
-

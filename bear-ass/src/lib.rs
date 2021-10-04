@@ -1,5 +1,5 @@
-pub mod parser;
 pub mod assembler;
+pub mod parser;
 pub mod processor;
 
 extern crate bear_vm;
@@ -11,6 +11,5 @@ pub enum Error {
     IOError(std::io::Error),
     ParserError(parser::Error),
     SerdeError(serde_json::Error),
-    AssemblerError(assembler::Error)
+    AssemblerError(assembler::Error),
 }
-

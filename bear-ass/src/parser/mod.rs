@@ -18,18 +18,24 @@ pub struct Error {
 
 impl Error {
     fn unknown(e: &dyn std::fmt::Display) -> Error {
-        Error{ message: e.to_string(), position: None }
+        Error {
+            message: e.to_string(),
+            position: None,
+        }
     }
 
     fn from_message(message: &str) -> Error {
-        Error{ message: message.to_string(), position: None }
+        Error {
+            message: message.to_string(),
+            position: None,
+        }
     }
 
     fn with_position_from_pair(mut self, pair: &Pair<Rule>) -> Error {
         let span = pair.as_span();
         let start = span.start_pos();
         let (line, column) = start.line_col();
-        self.position = Some(Position{ line, column });
+        self.position = Some(Position { line, column });
         return self;
     }
 
@@ -37,13 +43,26 @@ impl Error {
         let span = pair.as_span();
         let start = span.start_pos();
         let (line, column) = start.line_col();
-        let position = Some(Position{ line, column });
-        return Error{ message: format!("Unsupported {:?} -- {}", pair.as_rule(), pair.as_str()), position };
+        let position = Some(Position { line, column });
+        return Error {
+            message: format!("Unsupported {:?} -- {}", pair.as_rule(), pair.as_str()),
+            position,
+        };
     }
 }
 
 #[derive(Debug)]
-pub struct Position{ pub line: usize, pub column: usize }
+pub struct Position {
+    pub line: usize,
+    pub column: usize,
+}
+
+fn get_line_number(pair: &Pair<Rule>) -> usize {
+    let span = pair.as_span();
+    let start = span.start_pos();
+    let (number, _) = start.line_col();
+    return number;
+}
 
 pub struct Parser {}
 
@@ -64,28 +83,39 @@ impl Parser {
             }
             body.push(self.parse_line(line)?);
         }
-        return Ok(ast::Program{ body });
+        return Ok(ast::Program { body });
     }
 
     fn parse_line(&mut self, line: Pair<Rule>) -> Result<ast::Line, Error> {
+        let number = get_line_number(&line);
         let line = line.into_inner().next().unwrap();
         match line.as_rule() {
-            Rule::meta => Ok(ast::Line{ mark: false, labels: Vec::new(), body: self.parse_meta(line)? }),
+            Rule::meta => Ok(ast::Line {
+                mark: false,
+                labels: Vec::new(),
+                body: self.parse_meta(line)?,
+                number,
+            }),
             Rule::normal => self.parse_normal(line),
-            _ => panic!("! {:?}", line) // { return Err(Error::unsupported(&line)); }
+            _ => return Err(Error::unsupported(&line).with_position_from_pair(&line)),
         }
     }
 
     fn parse_meta(&mut self, line: Pair<Rule>) -> Result<ast::LineBody, Error> {
         let line = line.into_inner().next().unwrap();
         Ok(match line.as_rule() {
-            Rule::sep => ast::LineBody::Directive(ast::Directive::AlignTo(ast::Primitive::from(4).to_expr())),
+            Rule::sep => {
+                ast::LineBody::Directive(ast::Directive::AlignTo(ast::Primitive::from(4).to_expr()))
+            }
             Rule::directive => ast::LineBody::Directive(self.parse_directive(line)?),
-            _ => { return Err(Error::unsupported(&line)); }
+            _ => {
+                return Err(Error::unsupported(&line).with_position_from_pair(&line));
+            }
         })
     }
 
     fn parse_normal(&mut self, line: Pair<Rule>) -> Result<ast::Line, Error> {
+        let number = get_line_number(&line);
         let mut mark = false;
         let mut labels = Vec::new();
         let mut line = line.into_inner();
@@ -100,7 +130,12 @@ impl Parser {
             }
         }
         let body = self.parse_normal_body(body)?;
-        Ok(ast::Line{ mark, labels, body })
+        Ok(ast::Line {
+            mark,
+            labels,
+            body,
+            number,
+        })
     }
 
     fn parse_normal_body(&mut self, line: Pair<Rule>) -> Result<ast::LineBody, Error> {
@@ -108,7 +143,9 @@ impl Parser {
             Rule::data => ast::LineBody::Data(self.parse_data(line)?),
             Rule::definition_ref => ast::LineBody::DefinitionRef(line.as_str()[1..].to_string()),
             Rule::instruction => ast::LineBody::Simple(self.parse_opcode(line.as_str())?),
-            _ => { return Err(Error::unsupported(&line)); }
+            _ => {
+                return Err(Error::unsupported(&line).with_position_from_pair(&line));
+            }
         })
     }
 
@@ -122,40 +159,59 @@ impl Parser {
             "#include" => self.parse_command_include(name, directive),
             // TODO:
             // "#repeat" => self.parse_command_repeat(name, directive),
-            _ => Err(Error::unknown(&name.as_str()))
+            _ => Err(Error::unknown(&name.as_str()).with_position_from_pair(&name)),
         }
     }
 
-    fn parse_command_at(&mut self, directive: Pair<Rule>, mut arguments: Pairs<Rule>) -> Result<ast::Directive, Error> {
+    fn parse_command_at(
+        &mut self,
+        directive: Pair<Rule>,
+        mut arguments: Pairs<Rule>,
+    ) -> Result<ast::Directive, Error> {
         let first = expect_argument(&directive, arguments.next())?;
         expect_no_argument(&directive, arguments, 1)?;
         let expression = self.parse_expression(first)?;
         return Ok(ast::Directive::At(expression));
     }
 
-    fn parse_command_align(&mut self, directive: Pair<Rule>, mut arguments: Pairs<Rule>) -> Result<ast::Directive, Error> {
+    fn parse_command_align(
+        &mut self,
+        directive: Pair<Rule>,
+        mut arguments: Pairs<Rule>,
+    ) -> Result<ast::Directive, Error> {
         let first = expect_argument(&directive, arguments.next())?;
         expect_no_argument(&directive, arguments, 1)?;
         let expression = self.parse_expression(first)?;
         return Ok(ast::Directive::AlignTo(expression));
     }
 
-    fn parse_command_define(&mut self, directive: Pair<Rule>, mut arguments: Pairs<Rule>) -> Result<ast::Directive, Error> {
+    fn parse_command_define(
+        &mut self,
+        directive: Pair<Rule>,
+        mut arguments: Pairs<Rule>,
+    ) -> Result<ast::Directive, Error> {
         let name = expect(directive, Rule::identifier, arguments.next())?;
         let definition = expect_argument(&name, arguments.next())?;
         match definition.as_rule() {
             Rule::argument_list => {
                 let list = self.parse_argument_list(definition)?;
                 return Ok(ast::Directive::DefineList(name.as_str().to_string(), list));
-            },
+            }
             _ => {
                 let expression = self.parse_expression(definition)?;
-                return Ok(ast::Directive::DefineExpression(name.as_str().to_string(), expression));
+                return Ok(ast::Directive::DefineExpression(
+                    name.as_str().to_string(),
+                    expression,
+                ));
             }
         }
     }
 
-    fn parse_command_include(&mut self, directive: Pair<Rule>, mut arguments: Pairs<Rule>) -> Result<ast::Directive, Error> {
+    fn parse_command_include(
+        &mut self,
+        directive: Pair<Rule>,
+        mut arguments: Pairs<Rule>,
+    ) -> Result<ast::Directive, Error> {
         let first = expect_argument(&directive, arguments.next())?.as_str();
         expect_no_argument(&directive, arguments, 1)?;
         let path = std::path::PathBuf::from(&first[1..first.len() - 1]);
@@ -192,9 +248,9 @@ impl Parser {
                     Rule::r_string => ast::Data::Str(ast::StringTag::R, content),
                     Rule::c_string => ast::Data::Str(ast::StringTag::C, content),
                     Rule::s_string => ast::Data::Str(ast::StringTag::S, content),
-                    rule => panic!("unreachable: {:?}", rule) //unreachable!()
+                    rule => panic!("unreachable: {:?}", rule), //unreachable!()
                 }
-            },
+            }
             Rule::value => {
                 let mut data = data.clone().into_inner();
                 let size = data.next().unwrap();
@@ -203,28 +259,30 @@ impl Parser {
                     "d8" => ast::Data::D(ast::Size::S8, expr),
                     "d16" => ast::Data::D(ast::Size::S16, expr),
                     "d32" => ast::Data::D(ast::Size::S32, expr),
-                    rule => panic!("unreachable: {:?}", rule) //unreachable!()
+                    rule => panic!("unreachable: {:?}", rule), //unreachable!()
                 }
-            },
-            rule => panic!("unreachable: {:?}", rule) //unreachable!()
+            }
+            rule => panic!("unreachable: {:?}", rule), //unreachable!()
         })
     }
 
     fn parse_string(&mut self, string: Pair<Rule>) -> Result<String, Error> {
         // let (start, finish) = string.as_span().split();
         // let hint = finish.pos() - start.pos();
-        let raw = string.into_inner().next().unwrap().as_str();
-        let len = raw.len();
-        return Ok(raw[2..len-1].to_string());
+        let nl_regex = regex::Regex::new(r"[^\\]\\n").unwrap();
+        let slash_regex = regex::Regex::new(r"\\\\").unwrap();
+        let s = string.into_inner().next().unwrap().as_str();
+        let s = nl_regex.replace_all(s, "\n").to_string();
+        let s = slash_regex.replace_all(&s, "\\").to_string();
+        let len = s.len();
+        return Ok(s[2..len - 1].to_string());
     }
 
     fn parse_expression(&mut self, expr: Pair<Rule>) -> Result<ast::Expression, Error> {
         match expr.as_rule() {
-            Rule::expression_leaf =>
-                self.parse_expression_leaf(expr.into_inner().next().unwrap()),
-            Rule::expression_tree =>
-                self.parse_expression_tree(expr), //.into_inner().next().unwrap()),
-            rule => panic!("unreachable: {:?}", rule) //unreachable!()
+            Rule::expression_leaf => self.parse_expression_leaf(expr.into_inner().next().unwrap()),
+            Rule::expression_tree => self.parse_expression_tree(expr), //.into_inner().next().unwrap()),
+            rule => panic!("unreachable: {:?}", rule),                 //unreachable!()
         }
     }
 
@@ -240,7 +298,7 @@ impl Parser {
             "&" => ast::Expression::Tree(ast::BinOp::And, lhs, rhs),
             "|" => ast::Expression::Tree(ast::BinOp::Or, lhs, rhs),
             "^" => ast::Expression::Tree(ast::BinOp::Pow, lhs, rhs),
-            rule => panic!("unreachable: {:?}", rule) //unreachable!()
+            rule => panic!("unreachable: {:?}", rule), //unreachable!()
         })
     }
 
@@ -251,18 +309,22 @@ impl Parser {
             Rule::address => ast::Expression::Address(self.parse_address(leaf)?),
             Rule::quoted => {
                 let mut inner = leaf.into_inner();
-                ast::Expression::Quoted(self.parse_opcode(inner.next().unwrap().as_str())?)
-            },
+                let op = inner.next().unwrap();
+                match self.parse_opcode(op.as_str()) {
+                    Ok(value) => ast::Expression::Quoted(value),
+                    Err(err) => Err(err.with_position_from_pair(&op))?,
+                }
+            }
             Rule::definition_ref => {
                 let name = (leaf.as_str()[1..]).to_string();
                 ast::Expression::DefinitionRef(name)
-            },
+            }
             // TODO: This is a bit of a hack.  Can we avoid the recursive call?
             Rule::expression_leaf => {
                 let mut inner = leaf.into_inner();
                 self.parse_expression_leaf(inner.next().unwrap())?
-            },
-            rule => panic!("unreachable {:?}", rule)
+            }
+            rule => panic!("unreachable {:?}", rule),
         })
     }
 
@@ -270,14 +332,16 @@ impl Parser {
         let number = number.into_inner().next().unwrap();
         match number.as_rule() {
             Rule::number_dec => {
-                return Ok(ast::Primitive::from::<i64>(number.as_str().parse().map_err(|e| Error::unknown(&e))?));
-            },
+                return Ok(ast::Primitive::from::<i64>(
+                    number.as_str().parse().map_err(|e| Error::unknown(&e))?,
+                ));
+            }
             Rule::number_hex => {
                 let strip = number.as_str().trim_start_matches("0x");
                 let n = i64::from_str_radix(strip, 16).map_err(|e| Error::unknown(&e))?;
                 return Ok(ast::Primitive::from(n));
-            },
-            rule => panic!("unreachable: {:?}", rule)
+            }
+            rule => panic!("unreachable: {:?}", rule),
         }
     }
 
@@ -287,7 +351,7 @@ impl Parser {
             "@" => Ok(ast::Address::Here),
             "$>" => Ok(ast::Address::Next),
             "<$" => Ok(ast::Address::Prev),
-            name => Ok(ast::Address::LabelRef(name.to_string()))
+            name => Ok(ast::Address::LabelRef(name.to_string())),
         }
     }
 }
@@ -300,7 +364,7 @@ impl Parser {
             "'\\n'" => Ok('\n'),
             "'\\r'" => Ok('\r'),
             "'\\t'" => Ok('\t'),
-            string => Ok(string.chars().nth(1).unwrap())
+            string => Ok(string.chars().nth(1).unwrap()),
         }
     }
 
@@ -335,10 +399,6 @@ impl Parser {
             "store" => vm::OpCode::Store,
             "load.8" => vm::OpCode::Load8,
             "store.8" => vm::OpCode::Store8,
-            "loads" => vm::OpCode::Loads,
-            "stores" => vm::OpCode::Stores,
-            "loads.8" => vm::OpCode::Loads8,
-            "stores.8" => vm::OpCode::Stores8,
             "sext.8" => vm::OpCode::Sext8,
             "sext.16" => vm::OpCode::Sext16,
 
@@ -352,12 +412,18 @@ impl Parser {
 
             "nop" => vm::OpCode::Nop,
 
-            _ => { return Err(Error::unknown(&text)); }
+            _ => {
+                return Err(Error::unknown(&text));
+            }
         })
     }
 }
 
-fn expect<'a>(pair: Pair<Rule>, rule: Rule, on: Option<Pair<'a, Rule>>) -> Result<Pair<'a, Rule>, Error> {
+fn expect<'a>(
+    pair: Pair<Rule>,
+    rule: Rule,
+    on: Option<Pair<'a, Rule>>,
+) -> Result<Pair<'a, Rule>, Error> {
     if on.is_none() {
         let message = format!("Expected '{:?}'.", rule);
         Err(Error::from_message(&message).with_position_from_pair(&pair))
@@ -372,26 +438,10 @@ fn expect<'a>(pair: Pair<Rule>, rule: Rule, on: Option<Pair<'a, Rule>>) -> Resul
     }
 }
 
-/*
-fn expect_one_of<'a>(pair: Pair<Rule>, rules: Vec<Rule>, on: Option<Pair<'a, Rule>>) -> Result<Pair<'a, Rule>, Error> {
-    if on.is_none() {
-        let message = format!("Expected one of '{:?}'.", rules);
-        Err(Error::from_message(&message).with_position_from_pair(&pair))
-    } else {
-        let on = on.unwrap();
-        let on_rule = on.as_rule();
-        for rule in rules {
-            if on_rule == rule {
-                return Ok(on);
-            }
-        }
-        let message = format!("Expected identifier, fonud '{:?}'.", on);
-        return Err(Error::from_message(&message).with_position_from_pair(&pair));
-    }
-}
-*/
-
-fn expect_argument<'a>(pair: &Pair<Rule>, on: Option<Pair<'a, Rule>>) -> Result<Pair<'a, Rule>, Error> {
+fn expect_argument<'a>(
+    pair: &Pair<Rule>,
+    on: Option<Pair<'a, Rule>>,
+) -> Result<Pair<'a, Rule>, Error> {
     if on.is_none() {
         Err(Error::from_message("Expected argument.").with_position_from_pair(&pair))
     } else {
@@ -399,7 +449,11 @@ fn expect_argument<'a>(pair: &Pair<Rule>, on: Option<Pair<'a, Rule>>) -> Result<
     }
 }
 
-fn expect_no_argument<'a>(pair: &Pair<Rule>, arguments: Pairs<'a, Rule>, n: usize) -> Result<(), Error> {
+fn expect_no_argument<'a>(
+    pair: &Pair<Rule>,
+    arguments: Pairs<'a, Rule>,
+    n: usize,
+) -> Result<(), Error> {
     let count = arguments.count();
     if count == 0 {
         Ok(())
@@ -408,4 +462,3 @@ fn expect_no_argument<'a>(pair: &Pair<Rule>, arguments: Pairs<'a, Rule>, n: usiz
         Err(Error::from_message(&message).with_position_from_pair(&pair))
     }
 }
-

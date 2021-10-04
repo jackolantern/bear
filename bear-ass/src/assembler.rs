@@ -1,5 +1,5 @@
-use crate::processor;
 use crate::parser::ast;
+use crate::processor;
 
 #[derive(Debug)]
 pub enum Error {
@@ -35,7 +35,7 @@ pub struct Assembler {}
 
 impl Assembler {
     pub fn assemble(p: processor::Processor) -> Result<Vec<u8>, Error> {
-        let ass = Assembler{};
+        let ass = Assembler {};
         let mut bin = ImageBuilder::default();
 
         for proc in p.processed.iter() {
@@ -50,9 +50,10 @@ impl Assembler {
                 ast::LineBody::Simple(op) => bin.assemble_u8(op.into_u8()),
                 // By this point all of the preprocessor directives should have been handled.
                 // If a preprocessor directive is encountered, then something has gone wrong.
-                ast::LineBody::Directive(dir) =>
-                    panic!("Preprocessor error; encountered directive: {:?}", dir),
-                body => panic!("Assembler encountered '{:?}'.", body)
+                ast::LineBody::Directive(dir) => {
+                    panic!("Preprocessor error; encountered directive: {:?}", dir)
+                }
+                body => panic!("Assembler encountered '{:?}'.", body),
             }
         }
 
@@ -78,14 +79,14 @@ impl Assembler {
                     eprintln!("Expression cannot be simplified: {:?}", expr);
                     return Err(Error::ExpressionCannotBeSimplified(expr));
                 }
-            },
+            }
             ast::Data::Str(ast::StringTag::R, text) => {
                 bin.assemble_string(text);
-            },
+            }
             ast::Data::Str(ast::StringTag::C, text) => {
                 bin.assemble_string(text);
                 bin.assemble_u8(0);
-            },
+            }
             ast::Data::Str(ast::StringTag::S, text) => {
                 bin.assemble_u32(text.as_bytes().len() as u32);
                 bin.assemble_string(text);
@@ -93,4 +94,3 @@ impl Assembler {
         })
     }
 }
-

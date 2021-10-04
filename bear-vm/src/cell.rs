@@ -1,6 +1,6 @@
-use std::mem::transmute_copy;
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::mem::transmute_copy;
 
 /**
  * Represents a cell of memory.
@@ -14,12 +14,36 @@ pub type CellType = u32;
 pub struct Cell(pub u32);
 pub const SIZE: usize = std::mem::size_of::<u32>();
 
-impl From<u32> for Cell { fn from(x: u32) -> Cell { Cell(x) } }
-impl From<u16> for Cell { fn from(x: u16) -> Cell { Cell(x as u32) } }
-impl From<u8> for Cell { fn from(x: u8) -> Cell { Cell(x as u32) } }
-impl From<i32> for Cell { fn from(x: i32) -> Cell { Cell(unsafe { transmute_copy(&x) }) } }
-impl From<i16> for Cell { fn from(x: i16) -> Cell { Cell::from(x as i32) } }
-impl From<i8> for Cell { fn from(x: i8) -> Cell { Cell::from(x as i32) } }
+impl From<u32> for Cell {
+    fn from(x: u32) -> Cell {
+        Cell(x)
+    }
+}
+impl From<u16> for Cell {
+    fn from(x: u16) -> Cell {
+        Cell(x as u32)
+    }
+}
+impl From<u8> for Cell {
+    fn from(x: u8) -> Cell {
+        Cell(x as u32)
+    }
+}
+impl From<i32> for Cell {
+    fn from(x: i32) -> Cell {
+        Cell(unsafe { transmute_copy(&x) })
+    }
+}
+impl From<i16> for Cell {
+    fn from(x: i16) -> Cell {
+        Cell::from(x as i32)
+    }
+}
+impl From<i8> for Cell {
+    fn from(x: i8) -> Cell {
+        Cell::from(x as i32)
+    }
+}
 
 impl Into<u32> for Cell {
     fn into(self) -> u32 {

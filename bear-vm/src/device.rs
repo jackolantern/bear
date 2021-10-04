@@ -8,7 +8,7 @@ pub enum CommandTag {
     Reset = 0,
     Get = 1,
     Set = 2,
-    Exec = 3
+    Exec = 3,
 }
 
 #[repr(u8)]
@@ -16,7 +16,7 @@ pub enum CommandTag {
 pub enum StreamCommand {
     Read = 0,
     Write = 1,
-    Seek = 2
+    Seek = 2,
 }
 
 /**
@@ -27,13 +27,13 @@ pub enum StreamCommand {
 pub enum GenericDeviceState {
     Error(ErrorCode),
     ReadyForCommand,
-    Busy
+    Busy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenericDeviceCommand {
     Reset,
-    Execute{ command: u8, argument: u8 },
+    Execute { command: u8, argument: u8 },
     GetRegister(RegisterIndex),
     SetRegister(RegisterIndex, RegisterValue),
 }
@@ -66,7 +66,7 @@ impl GenericDeviceCommand {
         } else if command == CommandTag::Exec as u8 {
             let command = ((value & 0x0000FF00) >> 8) as u8;
             let argument = (value & 0x000000FF) as u8;
-            return Some(GenericDeviceCommand::Execute{ command, argument });
+            return Some(GenericDeviceCommand::Execute { command, argument });
         } else if value == 0 {
             return Some(GenericDeviceCommand::Reset);
         } else {
@@ -78,8 +78,12 @@ impl GenericDeviceCommand {
         match self {
             GenericDeviceCommand::Reset => 0,
             GenericDeviceCommand::GetRegister(index) => (1 << 24) | ((index as u32) << 16),
-            GenericDeviceCommand::SetRegister(index, value) => (2 << 24) | ((index as u32) << 16) | (value as u32),
-            GenericDeviceCommand::Execute{ command, argument } => (3 << 24) | ((command as u32) << 8) | (argument as u32)
+            GenericDeviceCommand::SetRegister(index, value) => {
+                (2 << 24) | ((index as u32) << 16) | (value as u32)
+            }
+            GenericDeviceCommand::Execute { command, argument } => {
+                (3 << 24) | ((command as u32) << 8) | (argument as u32)
+            }
         }
     }
 }
@@ -96,6 +100,5 @@ pub trait Device {
  */
 pub enum DMARequest {
     Read(usize),
-    Write(usize, u32)
+    Write(usize, u32),
 }
-

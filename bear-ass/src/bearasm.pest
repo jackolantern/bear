@@ -48,8 +48,7 @@ string = { r_string | c_string | s_string }
 r_string = { "r" ~ raw_string }
 c_string = { "c" ~ raw_string }
 s_string = { "s" ~ raw_string }
-raw_string = @{ quote ~ (escape | !(quote | NEWLINE) ~ ANY)* ~ quote }
-escape = @{ "\\" ~ (quote | "n" | "r" | "t") }
+raw_string = @{ quote ~ (!(quote | NEWLINE) ~ ANY)* ~ quote }
 quote = _{ "\"" }
 
 char = @{ "'" ~ ("\\n" | "\\t" | "\\r" | "\\'" | ANY) ~ "'" }

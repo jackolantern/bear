@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use std::convert::TryFrom;
+use std::path::PathBuf;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use bear_vm::vm;
 
@@ -92,7 +92,8 @@ pub struct Line {
     pub mark: bool,
     /// Labels are guaranteed to be unique.
     pub labels: Vec<String>,
-    pub body: LineBody
+    pub body: LineBody,
+    pub number: usize,
 }
 
 /// The body of a program line.
@@ -127,7 +128,7 @@ pub enum Address {
     /// The address of the previous mark.
     Prev,
     /// The address of the given label.
-    LabelRef(String)
+    LabelRef(String),
 }
 
 /// An expression.
@@ -158,8 +159,8 @@ impl Expression {
                     BinOp::Minus => lhs.sub(rhs),
                     BinOp::Times => lhs.mul(rhs),
                 })
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 }
@@ -191,15 +192,21 @@ impl Primitive {
         match self.0.cmp(&0) {
             std::cmp::Ordering::Equal => 0,
             std::cmp::Ordering::Less => -1,
-            std::cmp::Ordering::Greater => 1
+            std::cmp::Ordering::Greater => 1,
         }
     }
 
-    pub fn from<T>(value: T) -> Self where i64: From<T> {
+    pub fn from<T>(value: T) -> Self
+    where
+        i64: From<T>,
+    {
         Primitive(i64::from(value))
     }
 
-    pub fn try_into<T>(self) -> Option<T> where T: TryFrom<i64> {
+    pub fn try_into<T>(self) -> Option<T>
+    where
+        T: TryFrom<i64>,
+    {
         T::try_from(self.0).ok()
     }
 
@@ -316,7 +323,7 @@ impl std::fmt::Display for Directive {
                     write!(f, ", ")?
                 }
                 write!(f, "];")
-            },
+            }
             Directive::DefineExpression(name, expr) => write!(f, "#define {} {};", name, expr),
         }
     }
@@ -331,7 +338,7 @@ impl std::fmt::Display for Expression {
             Expression::Quoted(opcode) => opcode.fmt(f),
             Expression::Tree(bop, lhs, rhs) => write!(f, "({} {} {})", lhs, bop, rhs),
             Expression::ForwardMarkRef(_) => write!(f, "$"),
-            Expression::ForwardLabelRef(name) => write!(f, "{}", name)
+            Expression::ForwardLabelRef(name) => write!(f, "{}", name),
         }
     }
 }
@@ -353,7 +360,7 @@ impl std::fmt::Display for LineBody {
             LineBody::Data(data) => data.fmt(f)?,
             LineBody::Simple(opcode) => opcode.fmt(f)?,
             LineBody::Directive(directive) => directive.fmt(f)?,
-            LineBody::DefinitionRef(name) => write!(f, "!{}", name)?
+            LineBody::DefinitionRef(name) => write!(f, "!{}", name)?,
         };
         Ok(())
     }
@@ -384,7 +391,7 @@ impl std::fmt::Display for Program {
 #[derive(Serialize, Deserialize)]
 pub struct Debug {
     pub body: Vec<DebugLine>,
-    pub entries: Vec<DebugEntry>
+    pub entries: Vec<DebugEntry>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
@@ -405,5 +412,5 @@ pub struct DebugLine {
 pub struct DebugEntry {
     pub line: LineNumber,
     pub address: LineAddress,
+    pub names: Vec<String>,
 }
-

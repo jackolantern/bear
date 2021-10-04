@@ -1,0 +1,91 @@
+#define io_exec 3;
+#define io_write 1;
+#define io_stdout 1;
+
+lit jump
+===
+d32 &main
+
+===:main
+lit lit lit call
+d32 !io_stdout
+d32 &hello
+d32 &print:s
+halt
+
+===:hello
+s"Hello world!\n"
+
+===:loads:8 -- a --- v a'
+dup    -- a a
+push   -- a | a
+load.8 -- v | a
+pop    -- v a
+
+lit    -- v a 1
+add    -- v a'
+ret
+===
+d32 1
+
+===:loads:32 -- a --- v a'
+dup     -- a a
+push    -- a | a
+load    -- v | a
+pop     -- v a
+
+lit     -- v a 4
+add     -- v a'
+ret
+===
+d32 4
+
+===:putc -- dev c
+lit or io drop -- NOTE: no error handling
+d32 0x03000100
+ret
+
+===:print:s -- dev s
+lit call -- dev n s'
+swap lit -- dev s' n f
+d32 &loads:32
+d32 &print:s:for
+
+swap -- dev s' f n
+lit call ret
+d32 &sys:for
+
+===:print:s:for -- dev s --- *
+lit call push push -- dev | s' v
+d32 &loads:8
+
+dup      -- dev dev | s' v
+pop      -- dev dev v | s'
+lit call -- dev | s'
+d32 &putc
+
+pop ret
+===
+
+-- {{{ for
+
+===:sys:for:exit -- f 0 -- *
+drop drop ret
+
+===:sys:for -- f n -- *
+dup lit ifz:jump lit -- f n -1
+d32 &sys:for:exit
+d32 -1
+
+add  -- f n'
+push -- f | n'
+dup  -- f f | n'
+push -- f | n' f
+
+call pop pop lit
+d32 &sys:for
+
+jump
+===
+
+-- }}}

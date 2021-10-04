@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use crate::parser::ast;
 
@@ -27,24 +27,24 @@ pub enum ErrorTag {
 
     CannotAtToBeforeCurrentPosition,
 
-    DataSizeMismatch{ expected: u8, actual: u8 },
+    DataSizeMismatch { expected: u8, actual: u8 },
 }
 
 impl ErrorTag {
     fn to_error(self) -> Error {
-        Error{ tags: vec![ self ] }
+        Error { tags: vec![self] }
     }
 }
 
 #[derive(Debug)]
 pub struct Error {
-    tags: Vec<ErrorTag>
+    tags: Vec<ErrorTag>,
 }
 
 #[derive(Debug, Clone)]
 enum Definition {
     DefExpr(ast::Expression),
-    DefList(Vec<ast::LineBody>)
+    DefList(Vec<ast::LineBody>),
 }
 
 /// Files which have been included via a preprocessor directive.
@@ -59,7 +59,9 @@ impl Includes {
     // TODO: Errors
     fn parse(&mut self, path: &Path) -> Result<ast::Program, ErrorTag> {
         let contents = std::fs::read_to_string(path).map_err(|e| ErrorTag::IOError(e))?;
-        return crate::parser::Parser{}.parse(&contents).map_err(|e| ErrorTag::ParserError(e));
+        return crate::parser::Parser {}
+            .parse(&contents)
+            .map_err(|e| ErrorTag::ParserError(e));
     }
 
     fn include_file(&mut self, path: &Path) -> Result<ast::Program, ErrorTag> {
@@ -77,12 +79,12 @@ pub struct ProcessedLine {
     /// The content of the line.
     pub body: ast::LineBody,
     /// The computed address in the binary of the instruction encoded by the line.
-    pub address: ast::LineAddress
+    pub address: ast::LineAddress,
 }
 
 impl ProcessedLine {
     fn new(body: ast::LineBody, address: ast::LineAddress) -> ProcessedLine {
-        ProcessedLine{ body, address }
+        ProcessedLine { body, address }
     }
 }
 
@@ -104,7 +106,7 @@ pub struct Processor {
     includes: Includes,
 
     original: ast::Program,
-    pub processed: Vec<ProcessedLine>
+    pub processed: Vec<ProcessedLine>,
 }
 
 impl Processor {
@@ -119,7 +121,10 @@ impl Processor {
                 if position == 0 {
                     return Err(ErrorTag::PreviousMarkNotSet);
                 }
-                self.marks.get(position - 1).cloned().ok_or(ErrorTag::PreviousMarkNotSet)
+                self.marks
+                    .get(position - 1)
+                    .cloned()
+                    .ok_or(ErrorTag::PreviousMarkNotSet)
             }
         }
     }
@@ -127,9 +132,7 @@ impl Processor {
     fn resolve_next(&self, position: usize) -> Option<usize> {
         match self.marks.binary_search(&position) {
             Ok(p) => Some(self.marks[p]),
-            Err(p) => {
-                self.marks.get(p).cloned()
-            }
+            Err(p) => self.marks.get(p).cloned(),
         }
     }
 
@@ -147,7 +150,7 @@ impl Processor {
         match self.resolve_definition(&name) {
             Some(Definition::DefList(list)) => Ok(list),
             Some(_) => Err(ErrorTag::ExpectedList),
-            None => Err(ErrorTag::UnknownDefinition(name.into()))
+            None => Err(ErrorTag::UnknownDefinition(name.into())),
         }
     }
 
@@ -155,7 +158,7 @@ impl Processor {
         match self.resolve_definition(&name) {
             Some(Definition::DefExpr(expr)) => Ok(expr),
             Some(_) => Err(ErrorTag::ExpectedExpression),
-            None => Err(ErrorTag::UnknownDefinition(name.into()))
+            None => Err(ErrorTag::UnknownDefinition(name.into())),
         }
     }
 }
@@ -164,20 +167,42 @@ impl Processor {
     pub fn make_debug(&self) -> Result<ast::Debug, Error> {
         let mut body = Vec::new();
         for line in self.original.body.iter() {
-            let content = line.to_string();
             body.push(match &line.body {
-                ast::LineBody::Data(_) => ast::DebugLine{ content, tag: ast::DebugTag::Data },
-                ast::LineBody::Simple(_) => ast::DebugLine{ content, tag: ast::DebugTag::Instruction },
-                ast::LineBody::Directive(_) => ast::DebugLine{ content, tag: ast::DebugTag::Directive },
-                ast::LineBody::DefinitionRef(_) => ast::DebugLine{ content, tag: ast::DebugTag::Macro },
+                ast::LineBody::Data(x) => ast::DebugLine {
+                    content: x.to_string(),
+                    tag: ast::DebugTag::Data,
+                },
+                ast::LineBody::Simple(x) => ast::DebugLine {
+                    content: x.to_string(),
+                    tag: ast::DebugTag::Instruction,
+                },
+                ast::LineBody::Directive(x) => ast::DebugLine {
+                    content: x.to_string(),
+                    tag: ast::DebugTag::Directive,
+                },
+                ast::LineBody::DefinitionRef(x) => ast::DebugLine {
+                    content: x.to_string(),
+                    tag: ast::DebugTag::Macro,
+                },
             })
         }
         let mut entries = Vec::new();
+        let mut rev: HashMap<usize, Vec<String>> = HashMap::new();
+        for (label, address) in &self.labels {
+            let names = rev.entry(*address).or_insert(Vec::new());
+            names.push(label.clone());
+        }
         for item in &self.addresses {
-            entries.push(ast::DebugEntry{ address: *item.0, line: *item.1 });
+            let empty = &Vec::new();
+            let names = rev.get(item.0).unwrap_or(empty);
+            entries.push(ast::DebugEntry {
+                address: *item.0,
+                line: *item.1,
+                names: names.to_vec(),
+            });
         }
         entries.sort_by_key(|e| e.address);
-        return Ok(ast::Debug{ entries, body });
+        return Ok(ast::Debug { entries, body });
     }
 }
 
@@ -196,17 +221,16 @@ impl Processor {
         let mut lines = Vec::new();
         let mut preproc = Processor::default();
         let mut is_error = false;
-        let mut errors = Error{ tags: Vec::new() };
+        let mut errors = Error { tags: Vec::new() };
         preproc.original = program.clone();
-        for (i, line) in program.body.into_iter().enumerate() {
-            preproc.addresses.insert(preproc.position, i);
+        for line in program.body.into_iter() {
+            preproc.addresses.insert(preproc.position, line.number);
             match preproc.process_line(line) {
                 Err(error) => {
-                    eprintln!("Error: {:?}", error);
                     errors.tags.push(error);
                     is_error = true;
-                },
-                Ok(newlines) => lines.extend(newlines)
+                }
+                Ok(newlines) => lines.extend(newlines),
             }
         }
         // TODO: Aggregate errors.
@@ -217,10 +241,9 @@ impl Processor {
             let newline = preproc.fixup(processed);
             match newline {
                 Err(error) => {
-                    eprintln!("Error: {:?}", error);
                     errors.tags.push(error);
                     is_error = true;
-                },
+                }
                 Ok(line) => {
                     preproc.processed.push(line);
                 }
@@ -256,22 +279,22 @@ impl Processor {
     fn process_line_body(&mut self, line: ast::LineBody) -> Result<Vec<ProcessedLine>, ErrorTag> {
         let newlines = match line {
             // Sized strings are word aligned
-            ast::LineBody::Data(data@ast::Data::Str(_, _)) => {
+            ast::LineBody::Data(data @ ast::Data::Str(_, _)) => {
                 let position = self.align_to(WORD_SIZE);
                 let body = ast::LineBody::Data(self.process_data(data)?);
                 vec![ProcessedLine::new(body, position)]
-            },
+            }
             ast::LineBody::Data(data) => {
                 let position = self.position;
                 let body = ast::LineBody::Data(self.process_data(data)?);
                 vec![ProcessedLine::new(body, position)]
-            },
+            }
             ast::LineBody::Directive(dir) => self.process_directive(dir)?,
             ast::LineBody::Simple(op) => {
                 self.position += 1;
                 let body = ast::LineBody::Simple(op);
                 vec![ProcessedLine::new(body, self.position - 1)]
-            },
+            }
             ast::LineBody::DefinitionRef(name) => {
                 let mut lines = Vec::new();
                 let list = self.expect_definition_list(&name)?;
@@ -292,12 +315,15 @@ impl Processor {
                 let expr = self.simplify_expression(expr, self.position)?;
                 if let Some(p) = expr.as_primitive() {
                     if size.size_in_bytes() < p.min_bytes() {
-                        return Err(ErrorTag::DataSizeMismatch{ expected: size.size_in_bytes() as u8, actual: p.min_bytes() as u8 });
+                        return Err(ErrorTag::DataSizeMismatch {
+                            expected: size.size_in_bytes() as u8,
+                            actual: p.min_bytes() as u8,
+                        });
                     }
                 }
                 ast::Data::D(size, expr)
-            },
-            _ => data
+            }
+            _ => data,
         })
     }
 
@@ -312,21 +338,23 @@ impl Processor {
                 } else {
                     Err(ErrorTag::CannotAtToBeforeCurrentPosition)
                 }
-            },
+            }
             ast::Directive::AlignTo(expr) => {
-                let expr = self.simplify_expression(expr, self.position)?.as_primitive().unwrap();
+                let expr = self
+                    .simplify_expression(expr, self.position)?
+                    .as_primitive()
+                    .unwrap();
                 self.align_to(expr.try_into::<usize>().unwrap());
                 Ok(vec![])
-            },
+            }
             ast::Directive::Include(path) => {
                 let mut lines = Vec::new();
                 let program = self.includes.include_file(&path)?;
-                eprintln!("!!!!!!!! INC: {:?}", path);
                 for line in program.body {
                     lines.extend(self.process_line(line)?);
                 }
                 return Ok(lines);
-            },
+            }
             ast::Directive::DefineList(name, list) => {
                 if self.definitions.contains_key(&name) {
                     Err(ErrorTag::DefinitionAlreadyDefined(name))
@@ -334,7 +362,7 @@ impl Processor {
                     self.definitions.insert(name, Definition::DefList(list));
                     Ok(vec![])
                 }
-            },
+            }
             ast::Directive::DefineExpression(name, expr) => {
                 if self.definitions.contains_key(&name) {
                     Err(ErrorTag::DefinitionAlreadyDefined(name))
@@ -342,43 +370,42 @@ impl Processor {
                     self.definitions.insert(name, Definition::DefExpr(expr));
                     Ok(vec![])
                 }
-            },
+            }
         }
     }
 
     fn process_expression(&self, expr: ast::Expression) -> Result<ast::Expression, ErrorTag> {
         match expr {
-            ast::Expression::Tree(binop, lhs, rhs) =>
-                Ok(ast::Expression::Tree(
-                        binop,
-                        Box::new(self.process_expression(*lhs)?),
-                        Box::new(self.process_expression(*rhs)?))),
+            ast::Expression::Tree(binop, lhs, rhs) => Ok(ast::Expression::Tree(
+                binop,
+                Box::new(self.process_expression(*lhs)?),
+                Box::new(self.process_expression(*rhs)?),
+            )),
             ast::Expression::DefinitionRef(name) => self.expect_definition_expression(&name),
-            ast::Expression::Quoted(instruction) => Ok(ast::Primitive::from(instruction.into_u8()).to_expr()),
-            expr => Ok(expr)
+            ast::Expression::Quoted(instruction) => {
+                Ok(ast::Primitive::from(instruction.into_u8()).to_expr())
+            }
+            expr => Ok(expr),
         }
     }
 
-    fn simplify_expression(&self, expr: ast::Expression, here: usize) -> Result<ast::Expression, ErrorTag> {
+    fn simplify_expression(
+        &self,
+        expr: ast::Expression,
+        here: usize,
+    ) -> Result<ast::Expression, ErrorTag> {
         Ok(match expr.clone() {
-            ast::Expression::Address(addr) => {
-                match addr {
-                    ast::Address::Here =>
-                        ast::Primitive::from(here as i64).to_expr(),
-                    ast::Address::Prev =>
-                        ast::Primitive::from(self.resolve_prev()? as i64).to_expr(),
-                    ast::Address::Next => match self.resolve_next(here) {
-                        None => ast::Expression::ForwardMarkRef(here),
-                        Some(address) => ast::Primitive::from(address as i64).to_expr()
-                    },
-                    ast::Address::LabelRef(name) => {
-                        match self.resolve_label(&name[1..]) {
-                            Some(addr) =>
-                                ast::Primitive::from(addr as i64).to_expr(),
-                            None => expr
-                        }
-                    }
-                }
+            ast::Expression::Address(addr) => match addr {
+                ast::Address::Here => ast::Primitive::from(here as i64).to_expr(),
+                ast::Address::Prev => ast::Primitive::from(self.resolve_prev()? as i64).to_expr(),
+                ast::Address::Next => match self.resolve_next(here) {
+                    None => ast::Expression::ForwardMarkRef(here),
+                    Some(address) => ast::Primitive::from(address as i64).to_expr(),
+                },
+                ast::Address::LabelRef(name) => match self.resolve_label(&name[1..]) {
+                    Some(addr) => ast::Primitive::from(addr as i64).to_expr(),
+                    None => expr,
+                },
             },
             ast::Expression::Tree(op, lhs, rhs) => {
                 let lhs = self.simplify_expression(*lhs, here)?;
@@ -393,19 +420,20 @@ impl Processor {
                         ast::BinOp::Div => lhs.div(rhs),
                         ast::BinOp::Or => lhs.or(rhs),
                     }),
-                    _ => ast::Expression::Tree(op, Box::new(lhs), Box::new(rhs))
+                    _ => ast::Expression::Tree(op, Box::new(lhs), Box::new(rhs)),
                 }
-            },
+            }
             ast::Expression::DefinitionRef(name) => self.expect_definition_expression(&name)?,
             ast::Expression::ForwardMarkRef(position) => match self.resolve_next(position) {
                 None => {
                     return Err(ErrorTag::ExpressionCannotBeSimplified(expr));
-                },
-                Some(address) => ast::Primitive::from(address as i64).to_expr()
+                }
+                Some(address) => ast::Primitive::from(address as i64).to_expr(),
             },
-            ast::Expression::ForwardLabelRef(name) =>
-                ast::Primitive::from(self.resolve_label(&name).unwrap() as i64).to_expr(),
-            expr => expr
+            ast::Expression::ForwardLabelRef(name) => {
+                ast::Primitive::from(self.resolve_label(&name).unwrap() as i64).to_expr()
+            }
+            expr => expr,
         })
     }
 
@@ -418,19 +446,21 @@ impl Processor {
                 let expr = self.simplify_expression(expr, processed.address)?;
                 if let Some(p) = expr.as_primitive() {
                     if size.size_in_bytes() < p.min_bytes() {
-                        return Err(ErrorTag::DataSizeMismatch{
+                        return Err(ErrorTag::DataSizeMismatch {
                             actual: p.min_bytes() as u8,
                             expected: size.size_in_bytes() as u8,
                         });
                     }
                     let body = ast::LineBody::Data(ast::Data::D(size, p.to_expr()));
-                    return Ok(ProcessedLine{ address: processed.address, body });
+                    return Ok(ProcessedLine {
+                        address: processed.address,
+                        body,
+                    });
                 } else {
                     return Err(ErrorTag::ExpressionCannotBeSimplified(expr));
                 }
-            },
-            _ => return Ok(processed)
+            }
+            _ => return Ok(processed),
         }
     }
 }
-
