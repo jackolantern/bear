@@ -62,11 +62,11 @@ impl Assembler {
             bin.assemble_u8(0);
         }
 
-        return Ok(bin.bits);
+        Ok(bin.bits)
     }
 
     fn assemble_data(&self, data: ast::Data, bin: &mut ImageBuilder) -> Result<(), Error> {
-        Ok(match data {
+        match data {
             ast::Data::D(size, expr) => {
                 if let Some(p) = expr.as_primitive() {
                     match size {
@@ -91,6 +91,7 @@ impl Assembler {
                 bin.assemble_u32(text.as_bytes().len() as u32);
                 bin.assemble_string(text);
             }
-        })
+        };
+        Ok(())
     }
 }

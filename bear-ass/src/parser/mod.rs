@@ -36,7 +36,7 @@ impl Error {
         let start = span.start_pos();
         let (line, column) = start.line_col();
         self.position = Some(Position { line, column });
-        return self;
+        self
     }
 
     fn unsupported(pair: &Pair<Rule>) -> Error {
@@ -44,10 +44,10 @@ impl Error {
         let start = span.start_pos();
         let (line, column) = start.line_col();
         let position = Some(Position { line, column });
-        return Error {
+        Error {
             message: format!("Unsupported {:?} -- {}", pair.as_rule(), pair.as_str()),
             position,
-        };
+        }
     }
 }
 
@@ -61,7 +61,7 @@ fn get_line_number(pair: &Pair<Rule>) -> usize {
     let span = pair.as_span();
     let start = span.start_pos();
     let (number, _) = start.line_col();
-    return number;
+    number
 }
 
 pub struct Parser {}
@@ -71,7 +71,7 @@ pub struct Parser {}
 impl Parser {
     pub fn parse(mut self, text: &str) -> Result<ast::Program, Error> {
         let start = G::parse(Rule::start, text).map_err(|e| Error::unknown(&e))?;
-        return self.parse_start(start);
+        self.parse_start(start)
     }
 
     fn parse_start(&mut self, mut start: Pairs<Rule>) -> Result<ast::Program, Error> {
@@ -83,7 +83,7 @@ impl Parser {
             }
             body.push(self.parse_line(line)?);
         }
-        return Ok(ast::Program { body });
+        Ok(ast::Program { body })
     }
 
     fn parse_line(&mut self, line: Pair<Rule>) -> Result<ast::Line, Error> {
@@ -97,7 +97,7 @@ impl Parser {
                 number,
             }),
             Rule::normal => self.parse_normal(line),
-            _ => return Err(Error::unsupported(&line).with_position_from_pair(&line)),
+            _ => Err(Error::unsupported(&line).with_position_from_pair(&line)),
         }
     }
 
@@ -171,7 +171,7 @@ impl Parser {
         let first = expect_argument(&directive, arguments.next())?;
         expect_no_argument(&directive, arguments, 1)?;
         let expression = self.parse_expression(first)?;
-        return Ok(ast::Directive::At(expression));
+        Ok(ast::Directive::At(expression))
     }
 
     fn parse_command_align(
@@ -182,7 +182,7 @@ impl Parser {
         let first = expect_argument(&directive, arguments.next())?;
         expect_no_argument(&directive, arguments, 1)?;
         let expression = self.parse_expression(first)?;
-        return Ok(ast::Directive::AlignTo(expression));
+        Ok(ast::Directive::AlignTo(expression))
     }
 
     fn parse_command_define(
@@ -215,7 +215,7 @@ impl Parser {
         let first = expect_argument(&directive, arguments.next())?.as_str();
         expect_no_argument(&directive, arguments, 1)?;
         let path = std::path::PathBuf::from(&first[1..first.len() - 1]);
-        return Ok(ast::Directive::Include(path));
+        Ok(ast::Directive::Include(path))
     }
 
     fn parse_argument_list(&mut self, list: Pair<Rule>) -> Result<Vec<ast::LineBody>, Error> {
@@ -223,7 +223,7 @@ impl Parser {
         for line in list.into_inner() {
             lines.push(self.parse_normal_body(line)?);
         }
-        return Ok(lines);
+        Ok(lines)
     }
 
     /*
@@ -275,7 +275,7 @@ impl Parser {
         let s = nl_regex.replace_all(s, "\n").to_string();
         let s = slash_regex.replace_all(&s, "\\").to_string();
         let len = s.len();
-        return Ok(s[2..len - 1].to_string());
+        Ok(s[2..len - 1].to_string())
     }
 
     fn parse_expression(&mut self, expr: Pair<Rule>) -> Result<ast::Expression, Error> {
@@ -332,14 +332,14 @@ impl Parser {
         let number = number.into_inner().next().unwrap();
         match number.as_rule() {
             Rule::number_dec => {
-                return Ok(ast::Primitive::from::<i64>(
+                Ok(ast::Primitive::from::<i64>(
                     number.as_str().parse().map_err(|e| Error::unknown(&e))?,
-                ));
+                ))
             }
             Rule::number_hex => {
                 let strip = number.as_str().trim_start_matches("0x");
                 let n = i64::from_str_radix(strip, 16).map_err(|e| Error::unknown(&e))?;
-                return Ok(ast::Primitive::from(n));
+                Ok(ast::Primitive::from(n))
             }
             rule => panic!("unreachable: {:?}", rule),
         }
@@ -443,15 +443,15 @@ fn expect_argument<'a>(
     on: Option<Pair<'a, Rule>>,
 ) -> Result<Pair<'a, Rule>, Error> {
     if on.is_none() {
-        Err(Error::from_message("Expected argument.").with_position_from_pair(&pair))
+        Err(Error::from_message("Expected argument.").with_position_from_pair(pair))
     } else {
         Ok(on.unwrap())
     }
 }
 
-fn expect_no_argument<'a>(
+fn expect_no_argument(
     pair: &Pair<Rule>,
-    arguments: Pairs<'a, Rule>,
+    arguments: Pairs<'_, Rule>,
     n: usize,
 ) -> Result<(), Error> {
     let count = arguments.count();
@@ -459,6 +459,6 @@ fn expect_no_argument<'a>(
         Ok(())
     } else {
         let message = format!("Expected exactly {} arguments, but found {}.", n, n + count);
-        Err(Error::from_message(&message).with_position_from_pair(&pair))
+        Err(Error::from_message(&message).with_position_from_pair(pair))
     }
 }

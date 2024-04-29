@@ -178,7 +178,7 @@ impl Primitive {
     pub fn min_bytes(self) -> usize {
         let x = self.0.abs();
         if x <= u8::MAX as i64 {
-            return 1;
+            1
         } else if x <= u16::MAX as i64 {
             return 2;
         } else if x <= u32::MAX as i64 {
@@ -242,41 +242,41 @@ impl Primitive {
         if self.sign() == -1 {
             let v = self.0 as i32;
             let v: u32 = unsafe { std::mem::transmute_copy(&v) };
-            return Some(v);
+            Some(v)
         } else {
             let v = self.0 as u32;
-            return Some(v);
+            Some(v)
         }
     }
 }
 
 impl Primitive {
     pub fn add(self, other: Self) -> Self {
-        return Primitive(self.0 + other.0);
+        Primitive(self.0 + other.0)
     }
 
     pub fn sub(self, other: Self) -> Self {
-        return Primitive(self.0 - other.0);
+        Primitive(self.0 - other.0)
     }
 
     pub fn mul(self, other: Self) -> Self {
-        return Primitive(self.0 * other.0);
+        Primitive(self.0 * other.0)
     }
 
     pub fn div(self, other: Self) -> Self {
-        return Primitive(self.0 / other.0);
+        Primitive(self.0 / other.0)
     }
 
     pub fn and(self, other: Self) -> Self {
-        return Primitive(self.0 & other.0);
+        Primitive(self.0 & other.0)
     }
 
     pub fn or(self, other: Self) -> Self {
-        return Primitive(self.0 | other.0);
+        Primitive(self.0 | other.0)
     }
 
     pub fn pow(self, other: Self) -> Self {
-        return Primitive(self.0.pow(other.0 as u32));
+        Primitive(self.0.pow(other.0 as u32))
     }
 
     pub fn to_expr(self) -> Expression {

@@ -58,7 +58,7 @@ impl GenericDeviceCommand {
                 return None;
             }
             let index = ((value & 0x00FF0000) >> 16) as u8;
-            return Some(GenericDeviceCommand::GetRegister(index));
+            Some(GenericDeviceCommand::GetRegister(index))
         } else if command == CommandTag::Set as u8 {
             let index = ((value & 0x00FF0000) >> 16) as u8;
             let value = (value & 0x0000FFFF) as u16;

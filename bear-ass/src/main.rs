@@ -38,8 +38,8 @@ mod test {
         // let mut image = Vec::new();
         // let mut program = program.as_bytes();
         let program = parser::Parser {}
-            .parse(&program)
-            .map_err(|e| Error::ParserError(e))?;
+            .parse(program)
+            .map_err(Error::ParserError)?;
         let processor = processor::Processor::process(program).expect("Processor error.");
         let image = assembler::Assembler::assemble(processor).expect("Assembler error.");
         let vm = BearVM::new(bear_vm::util::convert_slice8_to_vec32(&image));
@@ -48,7 +48,7 @@ mod test {
             .run()
             .map_err(|e| Error::Unknown(format!("{:?}", e)))?;
         print_state(&state);
-        return Ok(state);
+        Ok(state)
     }
 
     #[test]
@@ -60,8 +60,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 2);
         assert!(state.vm.data == vec![(-3).into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -73,8 +73,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 2);
         assert!(state.vm.data == vec![1.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -86,8 +86,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 2);
         assert!(state.vm.data == vec![(-2).into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -99,8 +99,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 2);
         assert!(state.vm.data == vec![257.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -112,8 +112,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == vec![9.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -129,8 +129,8 @@ mod test {
         assert!(state.loaded_word_index == 3);
         assert!(state.current_word_index == 3);
         assert!(state.vm.data == vec![5.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -142,8 +142,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == vec![(-5).into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -155,8 +155,8 @@ mod test {
             ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == vec![(-9).into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -168,8 +168,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == vec![5.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -181,8 +181,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == vec![(-5).into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -194,8 +194,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == vec![14.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -207,8 +207,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == vec![(-14).into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -224,8 +224,8 @@ mod test {
         assert!(state.loaded_word_index == 3);
         assert!(state.current_word_index == 3);
         assert!(state.vm.data == vec![(-14).into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -237,8 +237,8 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == vec![14.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -251,9 +251,9 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == Vec::new());
-        assert!(state.vm.address.len() == 0);
+        assert!(state.vm.address.is_empty());
         assert!(state.vm.image[state.vm.image.len() - 1] == 1000);
-        return Ok(());
+        Ok(())
     }
 
     #[test]
@@ -266,9 +266,9 @@ mod test {
         ")?;
         assert!(state.instruction_index == 3);
         assert!(state.vm.data == Vec::new());
-        assert!(state.vm.address.len() == 0);
+        assert!(state.vm.address.is_empty());
         assert!(state.vm.image[state.vm.image.len() - 1] == 7);
-        return Ok(());
+        Ok(())
     }
 
     #[test]
@@ -285,8 +285,8 @@ mod test {
         assert!(state.loaded_word_index == 3);
         assert!(state.current_word_index == 4);
         assert!(state.vm.data == vec![7.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -303,8 +303,8 @@ mod test {
         assert!(state.loaded_word_index == 4);
         assert!(state.current_word_index == 5);
         assert!(state.vm.data == vec![7.into()]);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -321,8 +321,8 @@ mod test {
         assert!(state.instruction_index == 3);
         assert!(state.loaded_word_index == 0);
         assert!(state.current_word_index == 2);
-        assert!(state.vm.data.len() == 0);
-        assert!(state.vm.address.len() == 0);
-        return Ok(());
+        assert!(state.vm.data.is_empty());
+        assert!(state.vm.address.is_empty());
+        Ok(())
     }
 }

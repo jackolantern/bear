@@ -53,10 +53,10 @@ impl<T: Read> device::Device for StdinDevice<T> {
                     if (index as usize) < self.registers.len() {
                         let reg = &self.registers[index as usize];
                         if reg.can_read {
-                            return reg.value.or(Some(u32::MAX)).unwrap();
+                            return reg.value.unwrap_or(u32::MAX);
                         }
                     }
-                    return u32::MAX;
+                    u32::MAX
                 }
                 Some(device::GenericDeviceCommand::SetRegister(index, value)) => {
                     if (index as usize) < self.registers.len() {
@@ -66,7 +66,7 @@ impl<T: Read> device::Device for StdinDevice<T> {
                             return 0;
                         }
                     }
-                    return u32::MAX;
+                    u32::MAX
                 }
                 Some(device::GenericDeviceCommand::Execute {
                     command,
@@ -139,10 +139,10 @@ impl<T: Write> device::Device for StdoutDevice<T> {
                     if (index as usize) < self.registers.len() {
                         let reg = &self.registers[index as usize];
                         if reg.can_read {
-                            return reg.value.or(Some(u32::MAX)).unwrap();
+                            return reg.value.unwrap_or(u32::MAX);
                         }
                     }
-                    return u32::MAX;
+                    u32::MAX
                 }
                 Some(device::GenericDeviceCommand::SetRegister(index, value)) => {
                     if (index as usize) < self.registers.len() {
@@ -152,7 +152,7 @@ impl<T: Write> device::Device for StdoutDevice<T> {
                             return 0;
                         }
                     }
-                    return u32::MAX;
+                    u32::MAX
                 }
                 Some(device::GenericDeviceCommand::Execute { command, argument }) => {
                     if command == device::StreamCommand::Seek as u8 {
@@ -160,9 +160,9 @@ impl<T: Write> device::Device for StdoutDevice<T> {
                     } else if command == device::StreamCommand::Read as u8 {
                         u32::MAX
                     } else if command == device::StreamCommand::Write as u8 {
-                        let mut buffer = vec![argument];
-                        match self.handle.write(&mut buffer) {
-                            Ok(_) => 0 as u32,
+                        let buffer = vec![argument];
+                        match self.handle.write(&buffer) {
+                            Ok(_) => 0_u32,
                             Err(_) => u32::MAX,
                         }
                     } else {

@@ -45,30 +45,30 @@ impl From<i8> for Cell {
     }
 }
 
-impl Into<u32> for Cell {
-    fn into(self) -> u32 {
-        let Cell(x) = self;
+impl From<Cell> for u32 {
+    fn from(val: Cell) -> Self {
+        let Cell(x) = val;
         x
     }
 }
 
-impl Into<i32> for Cell {
-    fn into(self) -> i32 {
-        let Cell(x) = self;
+impl From<Cell> for i32 {
+    fn from(val: Cell) -> Self {
+        let Cell(x) = val;
         unsafe { transmute_copy(&x) }
     }
 }
 
-impl Into<usize> for Cell {
-    fn into(self) -> usize {
-        let Cell(x) = self;
+impl From<Cell> for usize {
+    fn from(val: Cell) -> Self {
+        let Cell(x) = val;
         x as usize
     }
 }
 
-impl Into<isize> for Cell {
-    fn into(self) -> isize {
-        let Cell(x) = self;
+impl From<Cell> for isize {
+    fn from(val: Cell) -> Self {
+        let Cell(x) = val;
         let x: i32 = unsafe { transmute_copy(&x) };
         x as isize
     }
@@ -200,12 +200,12 @@ impl std::ops::Mul for Cell {
 impl Cell {
     pub fn rem(self, other: Self) -> Cell {
         let r = self.0 % other.0;
-        return r.into();
+        r.into()
     }
 
     pub fn divmod(self, other: Self) -> (Cell, Cell) {
         let q = self.0 / other.0;
         let r = self.0 % other.0;
-        return (q.into(), r.into());
+        (q.into(), r.into())
     }
 }

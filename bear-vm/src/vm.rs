@@ -48,12 +48,12 @@ impl Error {
 
     fn with_ip(mut self, ip: usize) -> Self {
         self.ip = Some(ip);
-        return self;
+        self
     }
 
     fn with_ip_from_state(mut self, state: &ExecutionState) -> Self {
         self.ip = Some(state.ip());
-        return self;
+        self
     }
 }
 
@@ -300,7 +300,7 @@ pub struct BearVM {
 /// Wraps calls to push and pop the stacks with calls to the debugger and error handling code.
 impl BearVM {
     pub fn data_pop(&mut self) -> Result<Cell, Error> {
-        self.callback_debugger.as_ref().map(|d| (d.data_pop(self)));
+        if let Some(d) = self.callback_debugger.as_ref() { d.data_pop(self) }
         self.data.pop().ok_or(Error::data_underflow())
     }
 
@@ -309,24 +309,21 @@ impl BearVM {
     }
 
     pub fn data_push(&mut self, cell: Cell) {
-        self.callback_debugger
-            .as_ref()
-            .map(|d| (d.data_push(self, cell)));
+        if let Some(d) = self.callback_debugger
+            .as_ref() { d.data_push(self, cell) }
         self.data.push(cell);
     }
 
     fn address_pop(&mut self) -> Result<Cell, Error> {
-        self.callback_debugger
-            .as_ref()
-            .map(|d| (d.address_pop(self)));
+        if let Some(d) = self.callback_debugger
+            .as_ref() { d.address_pop(self) }
         let value = self.address.pop().ok_or(Error::address_underflow())?;
-        return Ok(value as Cell);
+        Ok(value as Cell)
     }
 
     fn address_push(&mut self, cell: Cell) {
-        self.callback_debugger
-            .as_ref()
-            .map(|d| (d.address_push(self, cell)));
+        if let Some(d) = self.callback_debugger
+            .as_ref() { d.address_push(self, cell) }
         self.address.push(unsafe { ::std::mem::transmute(cell) });
     }
 }
@@ -359,17 +356,17 @@ impl ExecutionState {
         assert!(self.instruction_index < 4);
         assert!(self.loaded_word_index & 0x7FFF == self.loaded_word_index);
         assert!(self.current_word_index & 0x7FFF == self.current_word_index);
-        let encoded = ((self.loaded_word_index << 17)
+        
+        ((self.loaded_word_index << 17)
             | (self.current_word_index << 2)
-            | self.instruction_index) as u32;
-        return encoded;
+            | self.instruction_index) as u32
     }
 
     pub fn ip_set_encoded(&mut self, ip: u32) -> Result<(), Error> {
         let ii = ip & 3;
         let lw = ip >> 17;
         let cw = (ip >> 2) & 0x7FFF;
-        return self.ip_set(lw as usize, cw as usize, ii as usize);
+        self.ip_set(lw as usize, cw as usize, ii as usize)
     }
 
     pub fn ip_inc(&mut self) -> Result<(), Error> {
@@ -384,7 +381,7 @@ impl ExecutionState {
         } else {
             self.instruction_index += 1;
         }
-        return Ok(());
+        Ok(())
     }
 
     pub fn ip_get_next(&self) -> usize {
@@ -397,7 +394,7 @@ impl ExecutionState {
 
     pub fn instruction(&self) -> Result<OpCode, Error> {
         let byte = self.word[self.instruction_index];
-        return OpCode::try_from(byte).map_err(|e| e.with_ip(self.ip()));
+        OpCode::try_from(byte).map_err(|e| e.with_ip(self.ip()))
     }
 }
 
@@ -416,7 +413,7 @@ impl ExecutionState {
         self.current_word_index += 1;
         let value = self.vm.image[self.current_word_index];
         self.vm.data_push(value.into());
-        return Ok(());
+        Ok(())
     }
 
     fn inst_sext_8(&mut self) -> Result<(), Error> {
@@ -430,7 +427,7 @@ impl ExecutionState {
         } else {
             self.vm.data_push(value.into());
         }
-        return Ok(());
+        Ok(())
     }
 
     fn inst_sext_16(&mut self) -> Result<(), Error> {
@@ -444,7 +441,7 @@ impl ExecutionState {
         } else {
             self.vm.data_push(value.into());
         }
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -458,11 +455,8 @@ impl ExecutionState {
      * Halt.
      */
     fn inst_halt(&mut self) {
-        match self.vm.data.last() {
-            Some(Cell(u32::MAX)) => {
-                self.dump().ok();
-            }
-            _ => {}
+        if Some(Cell(u32::MAX)) == self.vm.data.last().copied() {
+            self.dump().ok();
         }
     }
 
@@ -470,7 +464,7 @@ impl ExecutionState {
      * Do nothing.
      */
     fn inst_nop(&self) -> Result<(), Error> {
-        return Ok(());
+        Ok(())
     }
 
     /**
@@ -479,12 +473,12 @@ impl ExecutionState {
     fn inst_dup(&mut self) -> Result<(), Error> {
         let tos = self.data_peek()?;
         self.vm.data_push(tos);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_drop(&mut self) -> Result<(), Error> {
         self.vm.data_pop()?;
-        return Ok(());
+        Ok(())
     }
 
     /**
@@ -495,7 +489,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         self.vm.data_push(tos);
         self.vm.data_push(nos);
-        return Ok(());
+        Ok(())
     }
 
     /**
@@ -504,7 +498,7 @@ impl ExecutionState {
     fn inst_move_data_to_address(&mut self) -> Result<(), Error> {
         let data = self.data_pop()?;
         self.vm.address_push(data);
-        return Ok(());
+        Ok(())
     }
 
     /**
@@ -513,7 +507,7 @@ impl ExecutionState {
     fn inst_move_address_to_data(&mut self) -> Result<(), Error> {
         let addr = self.vm.address_pop()?;
         self.vm.data_push(addr);
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -523,7 +517,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         let value = tos | nos;
         self.vm.data_push(value);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_and(&mut self) -> Result<(), Error> {
@@ -531,7 +525,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         let value = tos & nos;
         self.vm.data_push(value);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_xor(&mut self) -> Result<(), Error> {
@@ -539,14 +533,14 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         let value = tos ^ nos;
         self.vm.data_push(value);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_not(&mut self) -> Result<(), Error> {
         let tos = self.data_pop()?;
         let value = !tos;
         self.vm.data_push(value);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_equal(&mut self) -> Result<(), Error> {
@@ -554,7 +548,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         self.vm
             .data_push(if tos == nos { (-1).into() } else { 0.into() });
-        return Ok(());
+        Ok(())
     }
 
     fn inst_less_than(&mut self) -> Result<(), Error> {
@@ -562,7 +556,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         self.vm
             .data_push(if tos < nos { (-1).into() } else { 0.into() });
-        return Ok(());
+        Ok(())
     }
 
     fn inst_greater_than(&mut self) -> Result<(), Error> {
@@ -570,7 +564,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         self.vm
             .data_push(if tos > nos { (-1).into() } else { 0.into() });
-        return Ok(());
+        Ok(())
     }
 
     fn inst_add(&mut self) -> Result<(), Error> {
@@ -578,7 +572,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         let value = tos + nos;
         self.vm.data_push(value);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_sub(&mut self) -> Result<(), Error> {
@@ -586,7 +580,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         let value = tos - nos;
         self.vm.data_push(value);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_mul(&mut self) -> Result<(), Error> {
@@ -594,7 +588,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         let value = tos * nos;
         self.vm.data_push(value);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_div(&mut self) -> Result<(), Error> {
@@ -602,7 +596,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         let q = tos / nos;
         self.vm.data_push(q);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_rem(&mut self) -> Result<(), Error> {
@@ -610,7 +604,7 @@ impl ExecutionState {
         let nos = self.data_pop()?;
         let r = tos.rem(nos);
         self.vm.data_push(r);
-        return Ok(());
+        Ok(())
     }
 
     fn inst_shift(&mut self) -> Result<(), Error> {
@@ -623,17 +617,15 @@ impl ExecutionState {
             nos << tos.abs()
         };
         self.vm.data_push(value.into());
-        return Ok(());
+        Ok(())
     }
 }
 
 impl ExecutionState {
     fn inst_jump(&mut self, ifz: bool) -> Result<(), Error> {
         let ip = self.data_pop()?.0 as usize;
-        if ifz {
-            if self.data_pop()?.0 != 0 {
-                return Ok(());
-            }
+        if ifz && self.data_pop()?.0 != 0 {
+            return Ok(());
         }
         let (w, i) = if ip != 0 && ip % 4 == 0 {
             ((ip / 4) - 1, 3)
@@ -641,15 +633,13 @@ impl ExecutionState {
             ((ip / 4), (ip % 4) - 1)
         };
         self.ip_set(w, w, i)?;
-        return Ok(());
+        Ok(())
     }
 
     fn inst_call(&mut self, ifz: bool) -> Result<(), Error> {
         let ip = self.data_pop()?.0 as usize;
-        if ifz {
-            if self.data_pop()?.0 != 0 {
-                return Ok(());
-            }
+        if ifz && self.data_pop()?.0 != 0 {
+            return Ok(());
         }
         let current = self.ip_get_encoded();
         self.vm
@@ -660,7 +650,7 @@ impl ExecutionState {
             ((ip / 4), (ip % 4) - 1)
         };
         self.ip_set(w, w, i)?;
-        return Ok(());
+        Ok(())
     }
 
     // This instruction will leave the value on the stack if it is not zero.
@@ -673,7 +663,7 @@ impl ExecutionState {
         }
         let ip = self.vm.address_pop()?;
         self.ip_set_encoded(ip.0)?;
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -684,7 +674,7 @@ impl ExecutionState {
         let device = &mut self.vm.devices[device_id.0 as usize];
         let result = device.ioctl(command.0);
         self.vm.data_push(result.into());
-        return Ok(());
+        Ok(())
     }
 
     /**
@@ -706,7 +696,7 @@ impl ExecutionState {
             */
         };
         self.vm.data_push(Cell::from(value));
-        return Ok(());
+        Ok(())
     }
 
     fn inst_load_8(&mut self) -> Result<(), Error> {
@@ -714,7 +704,7 @@ impl ExecutionState {
         let word = self.vm.image[address / 4];
         let byte = word.to_le_bytes()[address % 4];
         self.vm.data_push(Cell::from(byte));
-        return Ok(());
+        Ok(())
     }
 
     /**
@@ -723,15 +713,14 @@ impl ExecutionState {
     fn inst_store(&mut self) -> Result<(), Error> {
         let value = self.data_pop()?;
         let address = self.data_pop()?;
-        self.vm
+        if let Some(d) = self.vm
             .callback_debugger
-            .as_ref()
-            .map(|d| (d.store_8(address, value)));
+            .as_ref() { d.store_8(address, value) }
         let value: u32 = value.into();
         let address: usize = address.into();
         let r = address % 4;
         if r == 0 {
-            self.vm.image[address as usize / 4] = value;
+            self.vm.image[address / 4] = value;
         } else {
             panic!("store must be aligned.");
             /*
@@ -743,24 +732,23 @@ impl ExecutionState {
             self.vm.image[address / 4 + 1] = (self.vm.image[address / 4 + 1] & mask) | high;
             */
         }
-        return Ok(());
+        Ok(())
     }
 
     fn inst_store_8(&mut self) -> Result<(), Error> {
         let value = self.data_pop()?;
         let address = self.data_pop()?;
-        self.vm
+        if let Some(d) = self.vm
             .callback_debugger
-            .as_ref()
-            .map(|d| (d.store_8(address, value)));
+            .as_ref() { d.store_8(address, value) }
         // TODO: interupt if too big.
         let value: u32 = value.into();
         let address: usize = address.into();
-        let word = self.vm.image[address as usize / 4];
-        let mask = 0xFF << (address % 4) * 8;
-        let value = value << (address % 4) * 8;
-        self.vm.image[address as usize / 4] = (word & !mask) | value;
-        return Ok(());
+        let word = self.vm.image[address / 4];
+        let mask = 0xFF << ((address % 4) * 8);
+        let value = value << ((address % 4) * 8);
+        self.vm.image[address / 4] = (word & !mask) | value;
+        Ok(())
     }
 }
 
@@ -780,15 +768,14 @@ impl ExecutionState {
             self.sync();
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn step(&mut self) -> Result<(), Error> {
         let instruction = self.instruction()?;
-        self.vm
+        if let Some(d) = self.vm
             .callback_debugger
-            .as_ref()
-            .map(|d| d.ip(self, instruction));
+            .as_ref() { d.ip(self, instruction) }
         match instruction {
             OpCode::Nop => self.inst_nop(),
 
@@ -839,7 +826,7 @@ impl ExecutionState {
         }?;
 
         self.ip_inc()?;
-        return Ok(());
+        Ok(())
     }
 
     pub fn sync(&mut self) {
@@ -878,28 +865,26 @@ impl BearVM {
 
 impl BearVM {
     pub fn new(image: Vec<u32>) -> Self {
-        let mut vm: Self = Default::default();
-        vm.image = image;
-        vm
+        Self{ image, ..Default::default() }
     }
 
     pub fn with_logger(mut self, logger: fn(&str)) -> BearVM {
         self.debug_logger = Some(logger);
-        return self;
+        self
     }
 
     pub fn with_callback_debugger(mut self, debugger: Box<dyn CallbackDebugger>) -> BearVM {
         self.callback_debugger = Some(debugger);
-        return self;
+        self
     }
 
     pub fn with_device(mut self, device: Box<dyn Device>) -> BearVM {
         self.devices.push(device);
-        return self;
+        self
     }
 
     pub fn start(self) -> Result<ExecutionState, Error> {
-        self.log(&format!("stated."));
+        self.log("stated.");
 
         let state = ExecutionState {
             loaded_word_index: 0,
@@ -909,13 +894,13 @@ impl BearVM {
             running: true,
             vm: self,
         };
-        return Ok(state);
+        Ok(state)
     }
 
     pub fn load_image(&mut self, image: Vec<u8>) -> Result<(), Error> {
         self.image = crate::util::convert_slice8_to_vec32(&image);
         self.data.clear();
         self.address.clear();
-        return Ok(());
+        Ok(())
     }
 }

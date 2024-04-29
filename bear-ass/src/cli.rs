@@ -3,7 +3,7 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 
-use serde_json;
+
 
 use bear_ass::assembler::Assembler;
 use bear_ass::parser;
@@ -30,7 +30,7 @@ pub fn go() -> Result<(), Error> {
         .with_extension("debug");
     let output_debug_symbols = true; // !arg3.is_none() && (arg3 == Some("-d".to_string()) || arg3 == Some("--debug".to_string()));
     let out_bin = std::fs::File::create(out_bin_path)
-        .expect(&format!("Unable to create file: {:?}", out_bin_path));
+        .unwrap_or_else(|_| panic!("Unable to create file: {:?}", out_bin_path));
     let mut outbin_buf = std::io::BufWriter::new(out_bin);
     let in_file = std::fs::File::open(in_path).expect("Can't open file.");
     let mut reader = std::io::BufReader::new(in_file);
@@ -44,13 +44,13 @@ pub fn go() -> Result<(), Error> {
     };
     if output_debug_symbols {
         let out_debug = std::fs::File::create(&out_debug_path)
-            .expect(&format!("Unable to create file: {:?}", out_debug_path));
+            .unwrap_or_else(|_| panic!("Unable to create file: {:?}", out_debug_path));
         let mut outdebug_buf = std::io::BufWriter::new(out_debug);
         write_debug(&processor, &mut outdebug_buf)?;
     }
     let bits = Assembler::assemble(processor).expect("Assembler error");
-    outbin_buf.write_all(&bits).map_err(|e| Error::IOError(e))?;
-    return Ok(());
+    outbin_buf.write_all(&bits).map_err(Error::IOError)?;
+    Ok(())
 }
 
 pub fn parse(reader: &mut dyn Read) -> Result<parser::ast::Program, Error> {
@@ -58,12 +58,12 @@ pub fn parse(reader: &mut dyn Read) -> Result<parser::ast::Program, Error> {
     reader.read_to_string(&mut contents).unwrap();
     let program = parser::Parser {}
         .parse(&contents)
-        .map_err(|e| Error::ParserError(e))?;
-    return Ok(program);
+        .map_err(Error::ParserError)?;
+    Ok(program)
 }
 
 pub fn write_debug(p: &Processor, buf: &mut dyn Write) -> Result<(), Error> {
     let entries = p.make_debug().expect("Debug error.");
-    serde_json::to_writer_pretty(buf, &entries).map_err(|e| Error::SerdeError(e))?;
-    return Ok(());
+    serde_json::to_writer_pretty(buf, &entries).map_err(Error::SerdeError)?;
+    Ok(())
 }

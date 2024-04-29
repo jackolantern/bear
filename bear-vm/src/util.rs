@@ -6,14 +6,12 @@ pub fn convert_slice8_to_vec32(v8: &[u8]) -> Vec<u32> {
         let w = [e[0], e[1], e[2], e[3]];
         v32.push(u32::from_le_bytes(w));
     }
-    if r.len() != 0 {
+    if !r.is_empty() {
         let mut w = [0; 4];
-        for i in 0..r.len() {
-            w[i] = r[i];
-        }
+        w[..r.len()].copy_from_slice(r);
         v32.push(u32::from_le_bytes(w));
     }
-    return v32;
+    v32
 }
 
 pub fn convert_slice32_to_vec8(v32: &[u32]) -> Vec<u8> {
@@ -21,5 +19,5 @@ pub fn convert_slice32_to_vec8(v32: &[u32]) -> Vec<u8> {
     for e in v32.iter() {
         v8.extend(&e.to_le_bytes());
     }
-    return v8;
+    v8
 }

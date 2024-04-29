@@ -58,10 +58,10 @@ struct Includes {
 impl Includes {
     // TODO: Errors
     fn parse(&mut self, path: &Path) -> Result<ast::Program, ErrorTag> {
-        let contents = std::fs::read_to_string(path).map_err(|e| ErrorTag::IOError(e))?;
+        let contents = std::fs::read_to_string(path).map_err(ErrorTag::IOError)?;
         return crate::parser::Parser {}
             .parse(&contents)
-            .map_err(|e| ErrorTag::ParserError(e));
+            .map_err(ErrorTag::ParserError);
     }
 
     fn include_file(&mut self, path: &Path) -> Result<ast::Program, ErrorTag> {
@@ -147,7 +147,7 @@ impl Processor {
 
 impl Processor {
     fn expect_definition_list(&self, name: &str) -> Result<Vec<ast::LineBody>, ErrorTag> {
-        match self.resolve_definition(&name) {
+        match self.resolve_definition(name) {
             Some(Definition::DefList(list)) => Ok(list),
             Some(_) => Err(ErrorTag::ExpectedList),
             None => Err(ErrorTag::UnknownDefinition(name.into())),
@@ -155,7 +155,7 @@ impl Processor {
     }
 
     fn expect_definition_expression(&self, name: &str) -> Result<ast::Expression, ErrorTag> {
-        match self.resolve_definition(&name) {
+        match self.resolve_definition(name) {
             Some(Definition::DefExpr(expr)) => Ok(expr),
             Some(_) => Err(ErrorTag::ExpectedExpression),
             None => Err(ErrorTag::UnknownDefinition(name.into())),
@@ -202,7 +202,7 @@ impl Processor {
             });
         }
         entries.sort_by_key(|e| e.address);
-        return Ok(ast::Debug { entries, body });
+        Ok(ast::Debug { entries, body })
     }
 }
 
@@ -252,13 +252,13 @@ impl Processor {
         if is_error {
             return Err(errors);
         }
-        return Ok(preproc);
+        Ok(preproc)
     }
 
     fn process_line(&mut self, line: ast::Line) -> Result<Vec<ProcessedLine>, ErrorTag> {
         let processed = self.process_line_body(line.body)?;
-        if line.mark || 0 < line.labels.len() {
-            let position = if processed.len() == 0 {
+        if line.mark || !line.labels.is_empty() {
+            let position = if processed.is_empty() {
                 self.position
             } else {
                 processed[0].address
@@ -273,7 +273,7 @@ impl Processor {
                 self.labels.insert(label.to_string(), position);
             }
         }
-        return Ok(processed);
+        Ok(processed)
     }
 
     fn process_line_body(&mut self, line: ast::LineBody) -> Result<Vec<ProcessedLine>, ErrorTag> {
@@ -304,7 +304,7 @@ impl Processor {
                 lines
             }
         };
-        return Ok(newlines);
+        Ok(newlines)
     }
 
     fn process_data(&mut self, data: ast::Data) -> Result<ast::Data, ErrorTag> {
@@ -353,7 +353,7 @@ impl Processor {
                 for line in program.body {
                     lines.extend(self.process_line(line)?);
                 }
-                return Ok(lines);
+                Ok(lines)
             }
             ast::Directive::DefineList(name, list) => {
                 if self.definitions.contains_key(&name) {
@@ -452,15 +452,15 @@ impl Processor {
                         });
                     }
                     let body = ast::LineBody::Data(ast::Data::D(size, p.to_expr()));
-                    return Ok(ProcessedLine {
+                    Ok(ProcessedLine {
                         address: processed.address,
                         body,
-                    });
+                    })
                 } else {
-                    return Err(ErrorTag::ExpressionCannotBeSimplified(expr));
+                    Err(ErrorTag::ExpressionCannotBeSimplified(expr))
                 }
             }
-            _ => return Ok(processed),
+            _ => Ok(processed),
         }
     }
 }

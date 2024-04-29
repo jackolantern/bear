@@ -8,7 +8,7 @@ use bear_vm::vm::CallbackDebugger;
 use devices::{StdinDevice, StdoutDevice};
 
 use colored::*;
-use serde_json;
+
 
 struct DebugInfo {
     line: usize,
@@ -30,7 +30,7 @@ fn make_debug_info(raw: bear_ass::parser::ast::Debug) -> HashMap<usize, DebugInf
             },
         );
     }
-    return hm;
+    hm
 }
 
 impl CallbackDebugger for BasicDebugger {
@@ -63,7 +63,7 @@ impl CallbackDebugger for BasicDebugger {
             eprint!("{}", "| ".bold());
             eprint!("{} ", e.0.to_string().truecolor(0x35, 0xBA, 0xF6));
         }
-        eprintln!("");
+        eprintln!();
 
         eprint!("{}", "addr: ".bold());
         for e in state.vm.address.iter().rev() {
@@ -85,7 +85,7 @@ fn make_vm_from_path(
     debug: bool,
 ) -> bear_vm::vm::BearVM {
     let image_path = path.with_extension("bin");
-    let image = std::fs::read(image_path.clone()).expect(&format!("No image: {:?}", image_path));
+    let image = std::fs::read(image_path.clone()).unwrap_or_else(|_| panic!("No image: {:?}", image_path));
     let mut vm = bear_vm::vm::BearVM::new(bear_vm::util::convert_slice8_to_vec32(&image));
     for device in devices.into_iter() {
         vm = vm.with_device(device);
@@ -93,14 +93,14 @@ fn make_vm_from_path(
     if debug {
         let dbg_path = path.with_extension("debug");
         let dbg_raw =
-            std::fs::read_to_string(dbg_path.clone()).expect(&format!("No image: {:?}", dbg_path));
+            std::fs::read_to_string(dbg_path.clone()).unwrap_or_else(|_| panic!("No image: {:?}", dbg_path));
         let dbg_info: bear_ass::parser::ast::Debug =
             serde_json::from_str(&dbg_raw).expect("Could not load debug info.");
         return vm.with_callback_debugger(Box::new(BasicDebugger {
             info: make_debug_info(dbg_info),
         }));
     }
-    return vm;
+    vm
 }
 
 fn main() {
